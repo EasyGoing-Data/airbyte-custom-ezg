@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "Raw passthrough: real Google Play columns (verified from actual files) typed as string; cast/transform downstream in dbt. additionalProperties keeps any new column Google adds.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "store_id": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "app_id": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "_report_month": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "_source_file": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "_row_number": {
+      "type": [
+        "null",
+        "integer"
+      ]
+    },
+    "_file_modified_at": {
+      "type": [
+        "null",
+        "string"
+      ],
+      "format": "date-time"
+    },
+    "_synced_at": {
+      "type": [
+        "null",
+        "string"
+      ],
+      "format": "date-time"
+    },
+    "Date": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Package name": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Daily Device Installs": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Daily Device Uninstalls": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Daily Device Upgrades": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Total User Installs": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Daily User Installs": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Daily User Uninstalls": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Active Device Installs": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Install events": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Update events": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Uninstall events": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  }
+}

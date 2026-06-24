@@ -1,7 +1,8 @@
 ﻿__pycache__/
 *.pyc
 .venv/
-*.json
-!metadata.yaml
 secrets/
-.env
+easygoing-data-*.json
+sa*.json
+service_account*.json
+integration_tests/sample_config.json

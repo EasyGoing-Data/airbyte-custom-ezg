@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "Raw passthrough: real Google Play columns (verified from actual files) typed as string; cast/transform downstream in dbt. additionalProperties keeps any new column Google adds.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "store_id": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "app_id": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "_report_month": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "_source_file": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "_row_number": {
+      "type": [
+        "null",
+        "integer"
+      ]
+    },
+    "_file_modified_at": {
+      "type": [
+        "null",
+        "string"
+      ],
+      "format": "date-time"
+    },
+    "_synced_at": {
+      "type": [
+        "null",
+        "string"
+      ],
+      "format": "date-time"
+    },
+    "Order Number": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Order Charged Date": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Order Charged Timestamp": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Financial Status": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Device Model": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Product Title": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Package ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Product Type": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "SKU ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Currency of Sale": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Item Price": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Taxes Collected": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Charged Amount": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "City of Buyer": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "State of Buyer": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Postal Code of Buyer": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Country of Buyer": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Base Plan or Purchase Option ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Offer ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Group ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "First USD 1M Eligible": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Promotion ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Coupon Value": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Discount Rate": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Featured Product ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Price Experiment ID": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "Sales Channel": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  }
+}
