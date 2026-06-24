@@ -44,7 +44,7 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
       - name: Error if Load CDK Version Exists
-        uses: burrunan/gradle-cache-action@3bf23b8dd95e7d2bacf2470132454fe893a178a1 # v1
+        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
         env:
           CI: true
         with:
@@ -54,7 +54,7 @@ jobs:
           arguments: --scan :airbyte-cdk:bulk:checkLoadVersion
 
       - name: Build Load CDK
-        uses: burrunan/gradle-cache-action@3bf23b8dd95e7d2bacf2470132454fe893a178a1 # v1
+        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
         env:
           CI: true
         with:
@@ -64,7 +64,7 @@ jobs:
           arguments: --scan :airbyte-cdk:bulk:loadCdkBuild
 
       - name: Publish Load CDK to CloudRepo
-        uses: burrunan/gradle-cache-action@3bf23b8dd95e7d2bacf2470132454fe893a178a1 # v1
+        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
         env:
           CI: true
           CLOUDREPO_USER: ${{ secrets.CLOUDREPO_USER }}

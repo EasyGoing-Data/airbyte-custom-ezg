@@ -88,7 +88,7 @@ jobs:
           java-version: "21"
       - name: Check that base CDK version is incremented
         if: needs.changes-in-bulk-cdk-packages.outputs.base == 'true'
-        uses: burrunan/gradle-cache-action@3bf23b8dd95e7d2bacf2470132454fe893a178a1 # v1
+        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
         env:
           CI: true
         with:
@@ -98,7 +98,7 @@ jobs:
           arguments: --scan :airbyte-cdk:bulk:checkBaseVersion
       - name: Check that extract CDK version is incremented
         if: needs.changes-in-bulk-cdk-packages.outputs.extract == 'true'
-        uses: burrunan/gradle-cache-action@3bf23b8dd95e7d2bacf2470132454fe893a178a1 # v1
+        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
         env:
           CI: true
         with:
@@ -108,7 +108,7 @@ jobs:
           arguments: --scan :airbyte-cdk:bulk:checkExtractVersion
       - name: Check that load CDK version is incremented
         if: needs.changes-in-bulk-cdk-packages.outputs.load == 'true'
-        uses: burrunan/gradle-cache-action@3bf23b8dd95e7d2bacf2470132454fe893a178a1 # v1
+        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
         env:
           CI: true
         with:
@@ -137,7 +137,7 @@ jobs:
           distribution: "zulu"
           java-version: "21"
       - name: Run Java CDK Tests
-        uses: burrunan/gradle-cache-action@663fbad34e03c8f12b27f4999ac46e3d90f87eca # v3.0.1
+        uses: burrunan/gradle-cache-action@4b67497abd37a511d6c1dc6299bdd84ff39f7bf5 # v3.0.2
         env:
           CI: true
         with:
