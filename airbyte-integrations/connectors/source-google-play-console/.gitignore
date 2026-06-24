@@ -1,0 +1,7 @@
+﻿__pycache__/
+*.pyc
+.venv/
+*.json
+!metadata.yaml
+secrets/
+.env

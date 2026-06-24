@@ -1,0 +1,23 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "source-google-play-console"
+version = "0.1.0"
+description = "Airbyte source connector reading Google Play Console bulk reports from per-store GCS buckets."
+authors = ["Data Engineering"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "source_google_play_console" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+airbyte-cdk = "^7.0"
+google-cloud-storage = "^2.10"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[tool.poetry.scripts]
+source-google-play-console = "source_google_play_console.run:run"

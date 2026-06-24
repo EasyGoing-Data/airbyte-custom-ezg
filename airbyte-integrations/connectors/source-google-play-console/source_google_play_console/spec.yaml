@@ -1,0 +1,55 @@
+documentationUrl: https://docs.airbyte.com/integrations/sources/google-play-console
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Google Play Console Source Spec
+  type: object
+  required:
+    - service_account
+    - stores
+  properties:
+    service_account:
+      title: Service Account JSON
+      description: >-
+        Full service-account key JSON. The account needs account-level Viewer
+        access in each store's Play Console so it can read every
+        pubsite_prod_rev_* reporting bucket.
+      type: string
+      airbyte_secret: true
+      multiline: true
+      order: 0
+    stores:
+      title: Stores
+      description: One entry per Google Play developer account / reporting bucket.
+      type: array
+      order: 1
+      items:
+        type: object
+        required:
+          - store_id
+          - bucket
+        properties:
+          store_id:
+            title: Store ID
+            description: Your label for this store; emitted as the store_id column.
+            type: string
+          bucket:
+            title: GCS Bucket
+            description: Reporting bucket id, e.g. pubsite_prod_rev_0123456789.
+            type: string
+    start_date:
+      title: Start Date (YYYY-MM)
+      description: Optional. Leave empty to backfill all available months.
+      type: string
+      pattern: "^[0-9]{4}-[0-9]{2}$"
+      examples:
+        - "2025-01"
+      order: 2
+    lookback_days:
+      title: Lookback Days
+      description: >-
+        Re-read report files modified within this window to catch Google's
+        restatements (data is posted/updated 3-7 days after capture).
+      type: integer
+      default: 28
+      minimum: 0
+      order: 3
