@@ -2,7 +2,7 @@ data:
   connectorType: source
   definitionId: 38385108-c3be-4f68-bb54-4c363f4fda19
   dockerImageTag: 0.1.0
-  dockerRepository: <DOCKERHUB_USER>/source-google-play-console
+  dockerRepository: dataezg/source-google-play-console
   name: Google Play Console
   releaseStage: alpha
   supportLevel: community

@@ -12,7 +12,7 @@ readme = "README.md"
 packages = [{ include = "source_google_play_console" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.14"
 airbyte-cdk = "^7.0"
 google-cloud-storage = "^2.10"
 
@@ -21,3 +21,6 @@ pytest = "^8.0"
 
 [tool.poetry.scripts]
 source-google-play-console = "source_google_play_console.run:run"
+ 
+
+  

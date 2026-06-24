@@ -12,7 +12,7 @@ ENV AIRBYTE_ENTRYPOINT="python /airbyte/integration_code/main.py"
 ENTRYPOINT ["python", "/airbyte/integration_code/main.py"]
 
 LABEL io.airbyte.version=0.1.0
-LABEL io.airbyte.name=<DOCKERHUB_USER>/source-google-play-console
+LABEL LABEL io.airbyte.name=dataezg/source-google-play-console
 
 # Build & push (run from this folder, target VM is linux/amd64):
 #   docker buildx build --platform linux/amd64 \
