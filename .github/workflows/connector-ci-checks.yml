@@ -670,7 +670,7 @@ jobs:
         if: >
           always() && !cancelled() &&
           steps.get-app-token.outcome == 'success'
-        uses: LouisBrunner/checks-action@dfcbcf801bff1ea7f1414824fc28f2cd697b35da # v3.0.0
+        uses: LouisBrunner/checks-action@937cbbcde3259005b50746dc91cde29098aac2ff # v3.1.0
         with:
           name: "Connector CI Checks Summary" # << Name of the 'Required' check
           sha: ${{ needs.generate-matrix.outputs.commit-sha }}
