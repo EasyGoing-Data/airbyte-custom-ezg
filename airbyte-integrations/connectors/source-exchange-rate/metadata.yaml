@@ -1,0 +1,7 @@
+data:
+  connectorType: source
+  definitionId: 00000000-0000-0000-0000-0000exchange1
+  dockerImageTag: 0.1.0
+  dockerRepository: dataezg/source-exchange-rate
+  name: Exchange Rate (Frankfurter)
+  releaseStage: alpha

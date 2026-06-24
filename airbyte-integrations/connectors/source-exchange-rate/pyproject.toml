@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "source-exchange-rate"
+version = "0.1.0"
+description = "Airbyte source for exchange rates (Frankfurter API)"
+authors = ["EasyGoing Data"]
+readme = "README.md"
+packages = [{ include = "source_exchange_rate" }]
+include = ["source_exchange_rate/schemas/*.json"]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+airbyte-cdk = "^7.0"
+requests = "^2.31"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[tool.poetry.scripts]
+source-exchange-rate = "source_exchange_rate.run:run"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
