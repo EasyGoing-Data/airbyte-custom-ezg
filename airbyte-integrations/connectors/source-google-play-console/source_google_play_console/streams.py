@@ -9,7 +9,7 @@ Grain
 
 Incremental
 -----------
-  cursor = _file_modified_at (blob.updated). State theo từng store_id.
+  cursor = _modified_at_ (blob.updated). State theo từng store_id.
   Mỗi sync chỉ đọc blob có updated >= (cursor_store - lookback_days).
 
 Primary key: để None -> user chọn ở connection setup (UI).
@@ -31,9 +31,26 @@ from airbyte_cdk.sources.streams.core import IncrementalMixin
 
 from .gcs_client import GCSClient
 
+# Mọi tên cột (gốc lẫn metadata) đều chuẩn hóa về dạng _Tên_Sạch_ :
+# giữ chữ hoa/thường, thay ký tự không phải [0-9a-zA-Z] bằng "_", gộp "_", bọc 2 đầu.
+# Đảm bảo hợp lệ BigQuery (không dấu cách/ngoặc/%, không trùng tiền tố cấm _FILE_ ...).
+def _normalize(col: str) -> str:
+    s = re.sub(r"[^0-9a-zA-Z]+", "_", str(col)).strip("_")
+    return f"_{s}_"
+
+
+# Tên metadata SAU chuẩn hóa (connector chèn vào mỗi dòng).
+META_STORE_ID     = _normalize("store_id")        # _store_id_
+META_APP_ID       = _normalize("app_id")          # _app_id_
+META_REPORT_MONTH = _normalize("report_month")    # _report_month_
+META_SOURCE_FILE  = _normalize("source_file")     # _source_file_
+META_ROW_NUMBER   = _normalize("row_number")      # _row_number_
+META_MODIFIED_AT  = _normalize("modified_at")     # _modified_at_
+META_SYNCED_AT    = _normalize("synced_at")       # _synced_at_
+
 METADATA_FIELDS = [
-    "store_id", "app_id", "_report_month", "_source_file",
-    "_row_number", "_file_modified_at", "_synced_at",
+    META_STORE_ID, META_APP_ID, META_REPORT_MONTH, META_SOURCE_FILE,
+    META_ROW_NUMBER, META_MODIFIED_AT, META_SYNCED_AT,
 ]
 
 
@@ -43,7 +60,7 @@ def _iso(dt: datetime) -> str:
 
 class GooglePlayGCSStream(Stream, IncrementalMixin, ABC):
     primary_key: Optional[Any] = None
-    cursor_field: str = "_file_modified_at"
+    cursor_field: str = META_MODIFIED_AT
 
     # ---- subclass contract ----
     report_prefix: str = ""
@@ -57,18 +74,27 @@ class GooglePlayGCSStream(Stream, IncrementalMixin, ABC):
                  start_date: Optional[str] = None, lookback_days: int = 28, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._service_account = service_account
-        self._gcs_client: Optional[GCSClient] = None
+        self._gcs_client: Optional[GCSClient] = None  # tạo lazy ở lần đọc đầu
         self._stores = stores
-        self._start_date = start_date
+        self._start_date = start_date          # "YYYY-MM" hoặc None
         self._lookback_days = lookback_days
         self._cursor_value: MutableMapping[str, Any] = {}
         self._rx = re.compile(self.filename_regex)
 
     @property
     def _gcs(self) -> GCSClient:
+        # Chỉ khởi tạo client (parse SA) khi thật sự cần đọc data, không phải lúc discover.
         if self._gcs_client is None:
             self._gcs_client = GCSClient(self._service_account)
         return self._gcs_client
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        # Schema json khai tên cột GỐC (dễ đọc/đối chiếu); ở đây normalize tên property
+        # về _Tên_Sạch_ để KHỚP với key của row trong read_records.
+        schema = super().get_json_schema()
+        props = schema.get("properties", {})
+        schema["properties"] = {_normalize(k): v for k, v in props.items()}
+        return schema
 
     # ---- IncrementalMixin ----
     @property
@@ -122,21 +148,24 @@ class GooglePlayGCSStream(Stream, IncrementalMixin, ABC):
                 text = self._gcs.download_text(bucket, blob.name, self.encoding, self.is_zip)
                 reader = csv.DictReader(io.StringIO(text))
                 for i, row in enumerate(reader, start=1):
-                    row = {k: v for k, v in row.items() if k is not None}
+                    # đọc app_id từ tên cột GỐC trước khi normalize
                     if self.app_id_source == "column":
                         app_id = row.get(self.app_id_column)
                     else:
                         app_id = app_from_name
-                    row.update({
-                        "store_id": store_id,
-                        "app_id": app_id,
-                        "_report_month": yyyymm,
-                        "_source_file": f"gs://{bucket}/{blob.name}",
-                        "_row_number": i,
-                        "_file_modified_at": file_modified,
-                        "_synced_at": now,
+                    # chuẩn hóa tên mọi cột nguồn -> _Tên_Sạch_ (bỏ cột key None)
+                    out = {_normalize(k): v for k, v in row.items() if k is not None}
+                    # chèn metadata (tên đã ở dạng bọc)
+                    out.update({
+                        META_STORE_ID: store_id,
+                        META_APP_ID: app_id,
+                        META_REPORT_MONTH: yyyymm,
+                        META_SOURCE_FILE: f"gs://{bucket}/{blob.name}",
+                        META_ROW_NUMBER: i,
+                        META_MODIFIED_AT: file_modified,
+                        META_SYNCED_AT: now,
                     })
-                    yield row
+                    yield out
 
                 if max_seen is None or blob.updated > max_seen:
                     max_seen = blob.updated
@@ -178,6 +207,12 @@ class InstallsOverview(MonthlyPerAppCsvStream):
     name = "installs_overview"
     report_prefix = "stats/installs/"
     filename_regex = r"^installs_(?P<package>.+?)_(?P<yyyymm>\d{6})_overview\.csv$"
+
+
+class InstallsCountry(MonthlyPerAppCsvStream):
+    name = "installs_country"
+    report_prefix = "stats/installs/"
+    filename_regex = r"^installs_(?P<package>.+?)_(?P<yyyymm>\d{6})_country\.csv$"
 
 
 class Ratings(MonthlyPerAppCsvStream):

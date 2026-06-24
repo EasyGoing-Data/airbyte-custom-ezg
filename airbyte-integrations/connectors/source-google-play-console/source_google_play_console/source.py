@@ -7,7 +7,7 @@ from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 
 from .gcs_client import GCSClient
-from .streams import Earnings, EstimatedSales, InstallsOverview, Ratings, Reviews
+from .streams import Earnings, EstimatedSales, InstallsCountry, InstallsOverview, Ratings, Reviews
 
 
 class SourceGooglePlayConsole(AbstractSource):
@@ -31,6 +31,8 @@ class SourceGooglePlayConsole(AbstractSource):
         return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
+        # KHÔNG tạo GCSClient ở đây: discover chỉ cần liệt kê stream + schema,
+        # không phụ thuộc SA hợp lệ. Client được tạo lazy khi read_records chạy.
         common = dict(
             service_account=config["service_account"],
             stores=config.get("stores") or [],
@@ -41,6 +43,7 @@ class SourceGooglePlayConsole(AbstractSource):
             EstimatedSales(**common),
             Earnings(**common),
             InstallsOverview(**common),
+            InstallsCountry(**common),
             Ratings(**common),
             Reviews(**common),
         ]

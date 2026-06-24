@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$comment": "Raw passthrough: real Google Play columns (verified from actual files) typed as string; cast/transform downstream in dbt. additionalProperties keeps any new column Google adds.",
+  "$comment": "Raw passthrough: real Google Play installs-by-country columns (utf-16) as string; cast in dbt. Metadata names normalized at discover.",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -48,97 +48,79 @@
       ],
       "format": "date-time"
     },
-    "Package Name": {
+    "Date": {
       "type": [
         "null",
         "string"
       ]
     },
-    "App Version Code": {
+    "Package name": {
       "type": [
         "null",
         "string"
       ]
     },
-    "App Version Name": {
+    "Country": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Reviewer Language": {
+    "Daily Device Installs": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Device": {
+    "Daily Device Uninstalls": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Review Submit Date and Time": {
+    "Daily Device Upgrades": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Review Submit Millis Since Epoch": {
+    "Total User Installs": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Review Last Update Date and Time": {
+    "Daily User Installs": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Review Last Update Millis Since Epoch": {
+    "Daily User Uninstalls": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Star Rating": {
+    "Active Device Installs": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Review Title": {
+    "Install events": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Review Text": {
+    "Update events": {
       "type": [
         "null",
         "string"
       ]
     },
-    "Developer Reply Date and Time": {
-      "type": [
-        "null",
-        "string"
-      ]
-    },
-    "Developer Reply Millis Since Epoch": {
-      "type": [
-        "null",
-        "string"
-      ]
-    },
-    "Developer Reply Text": {
-      "type": [
-        "null",
-        "string"
-      ]
-    },
-    "Review Link": {
+    "Uninstall events": {
       "type": [
         "null",
         "string"

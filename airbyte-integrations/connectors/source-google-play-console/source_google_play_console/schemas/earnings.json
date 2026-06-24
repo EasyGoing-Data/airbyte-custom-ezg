@@ -16,32 +16,32 @@
         "string"
       ]
     },
-    "_report_month": {
+    "report_month": {
       "type": [
         "null",
         "string"
       ]
     },
-    "_source_file": {
+    "source_file": {
       "type": [
         "null",
         "string"
       ]
     },
-    "_row_number": {
+    "row_number": {
       "type": [
         "null",
         "integer"
       ]
     },
-    "_file_modified_at": {
+    "modified_at": {
       "type": [
         "null",
         "string"
       ],
       "format": "date-time"
     },
-    "_synced_at": {
+    "synced_at": {
       "type": [
         "null",
         "string"
