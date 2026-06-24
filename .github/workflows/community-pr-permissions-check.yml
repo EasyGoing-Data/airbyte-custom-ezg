@@ -57,7 +57,7 @@ jobs:
       - name: Render Comment Template
         if: steps.check.outputs.is_org_fork == 'true' || steps.check.outputs.missing_maintainer_edit == 'true'
         id: template
-        uses: chuhlomin/render-template@f828bb5c72a3e3af89cb79808cea490166c6f1ce # v1.4
+        uses: chuhlomin/render-template@a7c644e341797d050d1cb24332d83791b9a46dae # v1.12
         with:
           template: .github/pr-fork-permission-warning.md
           vars: |
