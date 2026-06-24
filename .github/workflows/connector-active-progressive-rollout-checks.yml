@@ -325,7 +325,7 @@ jobs:
           steps.rollout-gate-state.outputs.requires-ack == 'true' &&
           github.event_name == 'pull_request' &&
           steps.bypass-state.outputs.exists != 'true'
-        uses: bcgov/action-pr-description-add@14338bfe0278ead273b3c1189e5aa286ff6709c4 # v2.0.0
+        uses: bcgov/action-pr-description-add@d79a5c3b49d3b3b3215495afac3ae599cef191bb # v2.0.1
         with:
           github_token: ${{ github.token }}
           add_markdown: |
