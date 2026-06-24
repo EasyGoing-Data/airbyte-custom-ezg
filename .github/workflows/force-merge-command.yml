@@ -107,7 +107,7 @@ jobs:
 
       - name: Post to Slack
         if: steps.merge.outputs.merged == 'true'
-        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN_AIRBYTE_TEAM }}
           method: chat.postMessage
