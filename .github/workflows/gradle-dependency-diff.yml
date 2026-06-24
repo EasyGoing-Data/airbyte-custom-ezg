@@ -17,4 +17,4 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Run Gradle Dependency Diff
-        uses: be-hase/gradle-dependency-diff-action@c6832aa3ca2594b7f25136bad88155f483d1fa04 # v2.0.0
+        uses: be-hase/gradle-dependency-diff-action@b371bc71a47779fea4ca94a39a3c968137057d6b # v2.0.1
