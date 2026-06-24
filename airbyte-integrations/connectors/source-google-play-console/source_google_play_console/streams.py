@@ -53,15 +53,22 @@ class GooglePlayGCSStream(Stream, IncrementalMixin, ABC):
     app_id_source: str = "filename"      # "filename" | "column"
     app_id_column: Optional[str] = None
 
-    def __init__(self, gcs_client: GCSClient, stores: List[Mapping[str, str]],
+    def __init__(self, service_account: str, stores: List[Mapping[str, str]],
                  start_date: Optional[str] = None, lookback_days: int = 28, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._gcs = gcs_client
+        self._service_account = service_account
+        self._gcs_client: Optional[GCSClient] = None
         self._stores = stores
-        self._start_date = start_date          # "YYYY-MM" hoặc None
+        self._start_date = start_date
         self._lookback_days = lookback_days
         self._cursor_value: MutableMapping[str, Any] = {}
         self._rx = re.compile(self.filename_regex)
+
+    @property
+    def _gcs(self) -> GCSClient:
+        if self._gcs_client is None:
+            self._gcs_client = GCSClient(self._service_account)
+        return self._gcs_client
 
     # ---- IncrementalMixin ----
     @property

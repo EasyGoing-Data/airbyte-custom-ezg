@@ -31,10 +31,9 @@ class SourceGooglePlayConsole(AbstractSource):
         return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
-        gcs = GCSClient(config["service_account"])
         common = dict(
-            gcs_client=gcs,
-            stores=config["stores"],
+            service_account=config["service_account"],
+            stores=config.get("stores") or [],
             start_date=config.get("start_date"),
             lookback_days=config.get("lookback_days", 28),
         )
