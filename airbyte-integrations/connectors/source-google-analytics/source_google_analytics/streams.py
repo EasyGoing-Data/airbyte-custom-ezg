@@ -41,9 +41,149 @@ CURSOR_FIELD_RAW = "date"                        # tên GA4 trả về
 CURSOR_FIELD     = _normalize(CURSOR_FIELD_RAW)  # "_date_"
 
 
+
 # ---------------------------------------------------------------------------
-# GA4Stream — 1 instance = 1 report config
+# CohortStream — cohort retention report
 # ---------------------------------------------------------------------------
+
+class CohortStream(Stream, IncrementalMixin):
+    """
+    Cohort stream — firstSessionDate cohort, D0→D{cohort_range}.
+    Lazy client, normalize _Name_, metadata chuẩn.
+    """
+
+    state_checkpoint_interval = 100
+    primary_key = None  # set trong __init__
+
+    def __init__(
+        self,
+        credentials_json: str,
+        report_name: str,
+        dimensions: List[str],
+        metrics: List[str],
+        start_date: str,
+        cohort_range: int,
+        properties: List[Dict[str, str]],
+        number_days_backward: int,
+        get_last_x_days: bool,
+    ):
+        super().__init__()
+        self._credentials_json = credentials_json
+        self._report_name      = report_name
+        self._dimensions       = dimensions  # extra dims ngoài cohort/cohortNthDay
+        self._metrics          = metrics
+        self._start_date       = start_date
+        self._cohort_range     = cohort_range
+        self._properties       = properties
+        self._lookback         = number_days_backward
+        self._last_x_days      = get_last_x_days
+        self._state: Dict[str, str] = {}
+
+        # PK = property_id + cohort + cohortNthDay + extra dimensions
+        fixed = [_normalize("cohort"), _normalize("cohortNthDay")]
+        extra = [_normalize(d) for d in dimensions if d not in ("cohort", "cohortNthDay")]
+        self.primary_key = [META_PROPERTY_ID] + fixed + extra
+
+    @property
+    def name(self) -> str:
+        return self._report_name
+
+    @property
+    def cursor_field(self) -> str:
+        return _normalize("cohort")  # "_cohort_" — ngày cohort (YYYYMMDD)
+
+    @property
+    def state(self) -> MutableMapping[str, Any]:
+        return self._state
+
+    @state.setter
+    def state(self, value: MutableMapping[str, Any]):
+        self._state = dict(value)
+
+    def get_json_schema(self) -> Mapping[str, Any]:
+        props: Dict[str, Any] = {}
+        props[META_PROPERTY_ID]   = {"type": ["null", "string"]}
+        props[META_PROPERTY_NAME] = {"type": ["null", "string"]}
+        props[META_PACKAGE_NAME]  = {"type": ["null", "string"]}
+        props[META_SYNCED_AT]     = {"type": ["null", "string"]}
+
+        # cohort + cohortNthDay luôn có
+        for col in ["cohort", "cohortNthDay"] + self._dimensions + self._metrics:
+            props[_normalize(col)] = {"type": ["null", "string"]}
+
+        return {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "additionalProperties": True,
+            "properties": props,
+        }
+
+    def stream_slices(
+        self,
+        sync_mode: SyncMode,
+        cursor_field: Optional[List[str]] = None,
+        stream_state: Optional[Mapping[str, Any]] = None,
+    ) -> Iterable[Optional[Mapping[str, Any]]]:
+        for prop in self._properties:
+            yield {
+                "property_id":   prop["property_id"],
+                "property_name": prop["property_name"],
+                "package_name":  prop.get("package_name", ""),
+            }
+
+    def _start(self, property_id: str) -> str:
+        if self._last_x_days:
+            return (date.today() - timedelta(days=self._lookback)).strftime("%Y-%m-%d")
+        saved = self._state.get(property_id)
+        if saved:
+            saved_date = datetime.strptime(saved, "%Y%m%d").date()
+            start = (saved_date - timedelta(days=self._lookback)).strftime("%Y-%m-%d")
+            return max(start, self._start_date)
+        return self._start_date
+
+    def read_records(
+        self,
+        sync_mode: SyncMode,
+        cursor_field: Optional[List[str]] = None,
+        stream_slice: Optional[Mapping[str, Any]] = None,
+        stream_state: Optional[Mapping[str, Any]] = None,
+    ) -> Iterable[Mapping[str, Any]]:
+
+        if not stream_slice:
+            return
+
+        property_id   = stream_slice["property_id"]
+        property_name = stream_slice["property_name"]
+        package_name  = stream_slice["package_name"]
+        synced_at     = datetime.utcnow().isoformat() + "Z"
+
+        client = GA4Client(self._credentials_json)
+
+        rows = client.fetch_cohort(
+            property_id=property_id,
+            dimensions=self._dimensions,
+            metrics=self._metrics,
+            start_date=self._start(property_id),
+            cohort_range=self._cohort_range,
+        )
+
+        max_cohort: Optional[str] = self._state.get(property_id)
+
+        for row in rows:
+            cohort_val = row.get("cohort", "")
+            record: Dict[str, Any] = {_normalize(k): str(v) for k, v in row.items()}
+            record[META_PROPERTY_ID]   = property_id
+            record[META_PROPERTY_NAME] = property_name
+            record[META_PACKAGE_NAME]  = package_name
+            record[META_SYNCED_AT]     = synced_at
+
+            if cohort_val and (max_cohort is None or cohort_val > max_cohort):
+                max_cohort = cohort_val
+
+            yield record
+
+        if max_cohort:
+            self._state[property_id] = max_cohort
 
 class GA4Stream(Stream, IncrementalMixin):
     """

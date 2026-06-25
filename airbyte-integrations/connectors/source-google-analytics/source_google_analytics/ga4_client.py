@@ -18,6 +18,9 @@ from google.analytics.data_v1beta.types import (
     Dimension,
     Metric,
     RunReportRequest,
+    CohortSpec,
+    Cohort,
+    CohortsRange,
 )
 from google.oauth2 import service_account
 
@@ -126,6 +129,71 @@ class GA4Client:
 
         return rows
 
+    def fetch_cohort(
+        self,
+        property_id: str,
+        dimensions: List[str],
+        metrics: List[str],
+        start_date: str,
+        cohort_range: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Kéo cohort report — dùng CohortSpec thay vì DateRange thông thường.
+        Cohort by firstSessionDate, retention D0 → D{cohort_range}.
+        """
+        # Build cohort date ranges — mỗi ngày trong start_date là 1 cohort
+        cohort_spec = CohortSpec(
+            cohorts=[
+                Cohort(
+                    name="cohort",
+                    dimension="firstSessionDate",
+                    date_range=DateRange(start_date=start_date, end_date="today"),
+                )
+            ],
+            cohorts_range=CohortsRange(
+                granularity=CohortsRange.Granularity.DAILY,
+                start_offset=0,
+                end_offset=cohort_range,
+            ),
+        )
+
+        # cohort + cohortNthDay luôn bắt buộc
+        fixed_dims = ["cohort", "cohortNthDay"]
+        all_dims = fixed_dims + [d for d in dimensions if d not in fixed_dims]
+
+        rows = []
+        offset = 0
+
+        while True:
+            from google.analytics.data_v1beta.types import RunReportRequest as RR
+            req = RR(
+                property=f"properties/{property_id}",
+                dimensions=[Dimension(name=d) for d in all_dims],
+                metrics=[Metric(name=m) for m in metrics],
+                cohort_spec=cohort_spec,
+                offset=offset,
+                limit=PAGE_SIZE,
+            )
+
+            response = _run_with_backoff(self.client.run_report, req)
+
+            dim_headers = [h.name for h in response.dimension_headers]
+            met_headers = [h.name for h in response.metric_headers]
+
+            for row in response.rows:
+                record: Dict[str, Any] = {}
+                for i, dv in enumerate(row.dimension_values):
+                    record[dim_headers[i]] = dv.value
+                for i, mv in enumerate(row.metric_values):
+                    record[met_headers[i]] = mv.value
+                rows.append(record)
+
+            fetched = offset + len(response.rows)
+            if fetched >= response.row_count:
+                break
+            offset = fetched
+
+        return rows
     def check(self, property_id: str) -> bool:
         """Test kết nối — kéo 1 row sessions hôm qua."""
         yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
