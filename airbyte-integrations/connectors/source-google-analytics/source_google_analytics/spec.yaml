@@ -1,0 +1,130 @@
+documentationUrl: https://developers.google.com/analytics/devguides/reporting/data/v1
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Google Analytics GA4 Source Spec
+  type: object
+  required:
+    - credentials
+    - list_properties_name_and_id_as_dict
+  additionalProperties: true
+  properties:
+
+    credentials:
+      title: Credentials
+      order: 0
+      type: object
+      oneOf:
+        - title: Service Account JSON
+          type: object
+          required:
+            - credentials_json
+          properties:
+            auth_type:
+              type: string
+              const: service
+              order: 0
+            credentials_json:
+              title: Service Account JSON Key
+              description: >
+                Nội dung file Service Account JSON (dán nguyên chuỗi JSON).
+                Service Account phải được cấp quyền "Viewer" trên từng GA4 Property.
+              type: string
+              airbyte_secret: true
+              multiline: true
+              order: 1
+
+    list_properties_name_and_id_as_dict:
+      title: GA4 Properties
+      description: Danh sách GA4 Property cần kéo data. Mỗi entry là 1 app.
+      order: 1
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+          - property_name
+          - property_id
+          - package_name
+        additionalProperties: false
+        properties:
+          property_name:
+            title: Property Name
+            description: "Tên app/property để dùng làm metadata. Ví dụ: My Game VN"
+            order: 0
+            type: string
+          property_id:
+            title: Property ID
+            description: "GA4 Property ID — 9 chữ số. Ví dụ: 123456789"
+            order: 1
+            type: string
+            pattern: '^[0-9]{9}$'
+            pattern_descriptor: "9 digit number"
+          package_name:
+            title: Package Name
+            description: "Package name của app. Ví dụ: com.example.game"
+            order: 2
+            type: string
+
+    daily_reports:
+      title: Daily Reports
+      description: >
+        Danh sách report cần kéo. Mỗi report = 1 stream = 1 bảng BigQuery.
+        Dimensions và Metrics tra cứu tại
+        https://ga-dev-tools.google/ga4/dimensions-metrics-explorer/
+      order: 2
+      type: array
+      items:
+        type: object
+        required:
+          - report_name
+          - metrics
+          - start_date
+        additionalProperties: false
+        properties:
+          report_name:
+            title: Report Name
+            description: "Tên report — sẽ thành tên bảng BQ. Ví dụ: daily_revenue"
+            order: 0
+            type: string
+          dimensions:
+            title: Dimensions
+            description: "Danh sách dimensions. Mặc định luôn có 'date'."
+            order: 1
+            type: array
+            items:
+              type: string
+            default: []
+          metrics:
+            title: Metrics
+            description: "Danh sách metrics. Bắt buộc có ít nhất 1."
+            order: 2
+            type: array
+            items:
+              type: string
+          start_date:
+            title: Start Date
+            description: "Ngày bắt đầu kéo data. Định dạng YYYY-MM-DD."
+            order: 3
+            type: string
+            pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+            pattern_descriptor: "YYYY-MM-DD"
+            format: date
+
+    number_days_backward:
+      title: Lookback Days
+      description: >
+        Số ngày re-fetch lại từ hôm nay trở về. GA4 có thể reprocess data muộn
+        (đặc biệt AdMob revenue). Mặc định 7 ngày.
+      order: 3
+      type: ["null", "integer"]
+      minimum: 1
+      default: 7
+
+    get_last_x_days:
+      title: Get Last X Days Only
+      description: >
+        Nếu True — bỏ qua start_date, chỉ kéo X ngày gần nhất (X = number_days_backward).
+        Áp dụng cho cả full-refresh và incremental.
+      order: 4
+      type: ["null", "boolean"]
+      default: false

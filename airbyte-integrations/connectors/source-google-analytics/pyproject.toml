@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "source-google-analytics"
+version = "0.1.0"
+packages = [{ include = "source_google_analytics" }]
+include = ["source_google_analytics/schemas/*.json"]  # ép pip đóng gói json — §6
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"       # KHÔNG "^3.11" — §11
+airbyte-cdk = "^7.0"
+google-analytics-data = "^0.18"
+
+[tool.poetry.scripts]
+source-google-analytics = "source_google_analytics.run:run"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+secrets/
+# Chỉ chặn credentials JSON — KHÔNG chặn *.json (nuốt schemas/ — §7)
+sa*.json
+service_account*.json
+*-credentials.json
+easygoing-data-*.json

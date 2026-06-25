@@ -1,0 +1,6 @@
+data:
+  name: Google Analytics (GA4)
+  connectorType: source
+  dockerRepository: dataezg/source-google-analytics
+  dockerImageTag: 0.1.0
+  documentationUrl: https://developers.google.com/analytics/devguides/reporting/data/v1
