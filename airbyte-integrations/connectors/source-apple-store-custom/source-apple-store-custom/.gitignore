@@ -1,7 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
-secrets/
 # Chỉ chặn credentials, KHÔNG chặn schemas
 sa*.json
 service_account*.json
