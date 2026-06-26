@@ -58,40 +58,38 @@ class BaseAppStoreStream(Stream, IncrementalMixin, ABC):
 
     def __init__(
         self,
-        key_id: str,
-        issuer_id: str,
-        private_key: str,
         vendors: List[Dict],
-        apps: List[Dict],
+        apps_by_vendor: Dict[str, List[Dict]],
         start_date: str,
         lookback_days: int,
         get_last_x_days: bool,
         timezone: str,
     ):
         super().__init__()
-        self._key_id         = key_id
-        self._issuer_id      = issuer_id
-        self._private_key    = private_key
+        # Each vendor carries its own auth: vendor_id, vendor_name,
+        # key_id, issuer_id, private_key
         self._vendors        = vendors
-        self._apps           = apps            # [{app_id, app_name, bundle_id}]
-        self._start_date     = start_date      # YYYY-MM-DD
+        self._apps_by_vendor = apps_by_vendor   # {vendor_id: [{app_id, app_name}]}
+        self._start_date     = start_date       # YYYY-MM-DD
         self._lookback_days  = lookback_days
         self._get_last_x_days = get_last_x_days
         self._timezone       = timezone
-        self._client_obj: Optional[AppStoreClient] = None
+        # Lazy clients, one per vendor_id (§3.1)
+        self._clients: Dict[str, AppStoreClient] = {}
         self._state: MutableMapping[str, Any] = {}
 
-    # ── Lazy client ───────────────────────────────────────────────────────────
+    # ── Lazy client per vendor ────────────────────────────────────────────────
 
-    @property
-    def _client(self) -> AppStoreClient:
-        if self._client_obj is None:
-            self._client_obj = AppStoreClient(
-                key_id=self._key_id,
-                issuer_id=self._issuer_id,
-                private_key=self._private_key,
+    def _client_for(self, vendor: Dict) -> AppStoreClient:
+        """Get or create a client using this vendor's own credentials."""
+        vid = vendor["vendor_id"]
+        if vid not in self._clients:
+            self._clients[vid] = AppStoreClient(
+                key_id=vendor["key_id"],
+                issuer_id=vendor["issuer_id"],
+                private_key=vendor["private_key"],
             )
-        return self._client_obj
+        return self._clients[vid]
 
     # ── IncrementalMixin state ────────────────────────────────────────────────
 
@@ -205,17 +203,18 @@ class SummarySalesStream(BaseAppStoreStream):
     ) -> Iterable[Mapping[str, Any]]:
         vendor    = stream_slice["vendor"]
         vendor_id = vendor["vendor_id"]
+        client    = self._client_for(vendor)
 
         for day in self._date_range(slice_key=vendor_id):
             date_str = day.strftime("%Y-%m-%d")
             logger.info(f"[summary_sales] vendor={vendor_id} date={date_str}")
 
-            content = self._client.fetch_sales_report(vendor_id, date_str)
+            content = client.fetch_sales_report(vendor_id, date_str)
             if not content:
                 logger.debug(f"No data for vendor={vendor_id} date={date_str}")
                 continue
 
-            for raw in self._client.parse_gzip_tsv(content):
+            for raw in client.parse_gzip_tsv(content):
                 record = self._inject_metadata(raw, vendor)
                 # Update state cursor
                 cursor_val = record.get(self.cursor_field)
@@ -295,16 +294,17 @@ class FinancialReportStream(BaseAppStoreStream):
     ) -> Iterable[Mapping[str, Any]]:
         vendor    = stream_slice["vendor"]
         vendor_id = vendor["vendor_id"]
+        client    = self._client_for(vendor)
 
         for year_month in self._month_range(vendor_id):
             logger.info(f"[financial_report] vendor={vendor_id} month={year_month}")
 
-            content = self._client.fetch_finance_report(vendor_id, year_month)
+            content = client.fetch_finance_report(vendor_id, year_month)
             if not content:
                 logger.debug(f"No financial data for vendor={vendor_id} month={year_month}")
                 continue
 
-            for raw in self._client.parse_gzip_tsv(content):
+            for raw in client.parse_gzip_tsv(content):
                 record = self._inject_metadata(raw, vendor)
                 cursor_val = record.get(self.cursor_field)
                 if cursor_val:
@@ -354,39 +354,45 @@ class BaseAnalyticsStream(BaseAppStoreStream, ABC):
         """Analytics report name: 'APP_INSTALLS' | 'APP_SESSIONS'"""
         ...
 
-    def _get_app_state(self, app_id: str) -> Dict[str, Any]:
-        return self._state.get(app_id, {})
+    def _get_app_state(self, state_key: str) -> Dict[str, Any]:
+        return self._state.get(state_key, {})
 
-    def _save_app_state(self, app_id: str, **kwargs) -> None:
-        self._state.setdefault(app_id, {}).update(kwargs)
+    def _save_app_state(self, state_key: str, **kwargs) -> None:
+        self._state.setdefault(state_key, {}).update(kwargs)
 
     def stream_slices(self, **kwargs) -> Iterable[Mapping[str, Any]]:
-        """One slice per (vendor, app). Requires apps to be pre-discovered."""
-        for app in self._apps:
-            # Use first vendor as metadata carrier (account-level analytics)
-            vendor = self._vendors[0] if self._vendors else {"vendor_id": "", "vendor_name": ""}
-            yield {"app": app, "vendor": vendor}
+        """One slice per (vendor, app). Apps are discovered per vendor."""
+        for vendor in self._vendors:
+            vid = vendor["vendor_id"]
+            for app in self._apps_by_vendor.get(vid, []):
+                yield {"app": app, "vendor": vendor}
 
     def read_records(
         self,
         stream_slice: Mapping[str, Any],
         **kwargs,
     ) -> Iterable[Mapping[str, Any]]:
-        app    = stream_slice["app"]
-        vendor = stream_slice["vendor"]
-        app_id = app["app_id"]
+        app       = stream_slice["app"]
+        vendor    = stream_slice["vendor"]
+        vendor_id = vendor["vendor_id"]
+        app_id    = app["app_id"]
+        client    = self._client_for(vendor)
 
-        app_state           = self._get_app_state(app_id)
+        # State keyed by vendor_id:app_id so apps with same id across
+        # different accounts don't collide
+        state_key = f"{vendor_id}:{app_id}"
+
+        app_state           = self._get_app_state(state_key)
         ongoing_request_id  = app_state.get("ongoing_request_id")
         snapshot_request_id = app_state.get("snapshot_request_id")
         snapshot_done       = app_state.get("snapshot_done", False)
 
-        for day in self._date_range(slice_key=app_id):
+        for day in self._date_range(slice_key=state_key):
             date_str = day.strftime("%Y-%m-%d")
-            logger.info(f"[{self.name}] app={app_id} date={date_str}")
+            logger.info(f"[{self.name}] vendor={vendor_id} app={app_id} date={date_str}")
 
             records, ongoing_request_id, snapshot_request_id, snapshot_done = \
-                self._client.fetch_analytics_data(
+                client.fetch_analytics_data(
                     app_id=app_id,
                     report_name=self.report_name,
                     date=date_str,
@@ -397,7 +403,7 @@ class BaseAnalyticsStream(BaseAppStoreStream, ABC):
 
             # Persist analytics request IDs in state after every date
             self._save_app_state(
-                app_id,
+                state_key,
                 ongoing_request_id=ongoing_request_id,
                 snapshot_request_id=snapshot_request_id,
                 snapshot_done=snapshot_done,
@@ -405,12 +411,11 @@ class BaseAnalyticsStream(BaseAppStoreStream, ABC):
 
             for raw in records:
                 record = self._inject_metadata(raw, vendor)
-                # Inject app metadata (analytics data has app_name/app_apple_id natively)
                 cursor_val = record.get(self.cursor_field)
                 if cursor_val:
-                    self._update_state(app_id, cursor_val)
+                    self._update_state(state_key, cursor_val)
                     self._save_app_state(
-                        app_id, **{self.cursor_field: self._state[app_id][self.cursor_field]}
+                        state_key, **{self.cursor_field: self._state[state_key][self.cursor_field]}
                     )
                 yield record
 

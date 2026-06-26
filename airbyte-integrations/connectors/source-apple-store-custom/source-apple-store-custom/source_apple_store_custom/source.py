@@ -1,8 +1,9 @@
 """
 SourceAppleAppStore — AbstractSource implementation.
 
-check_connection(): validates JWT + discovers apps (does NOT init streams).
-streams(): returns stream instances with lazy client + pre-discovered apps.
+check_connection(): validates each vendor's JWT + discovers its apps.
+streams(): returns stream instances with per-vendor lazy clients and
+           apps discovered per vendor.
 """
 
 import logging
@@ -21,28 +22,42 @@ from .streams import (
 
 logger = logging.getLogger("airbyte")
 
-DEFAULT_LOOKBACK_DAYS  = 7
+DEFAULT_LOOKBACK_DAYS   = 7
 DEFAULT_GET_LAST_X_DAYS = False
 DEFAULT_TIMEZONE        = "UTC"
 
 
 class SourceAppleAppStore(AbstractSource):
 
-    def _build_client(self, config: Mapping[str, Any]) -> AppStoreClient:
-        return AppStoreClient(
-            key_id      = config["key_id"],
-            issuer_id   = config["issuer_id"],
-            private_key = config["private_key"],
-        )
+    def _discover_apps_by_vendor(
+        self, vendors: List[Dict]
+    ) -> Dict[str, List[Dict]]:
+        """
+        Discover apps for each vendor using that vendor's own credentials.
+        Returns {vendor_id: [{app_id, app_name, bundle_id}]}.
+        """
+        apps_by_vendor: Dict[str, List[Dict]] = {}
+        for vendor in vendors:
+            vid = vendor["vendor_id"]
+            try:
+                client = AppStoreClient(
+                    key_id=vendor["key_id"],
+                    issuer_id=vendor["issuer_id"],
+                    private_key=vendor["private_key"],
+                )
+                apps_by_vendor[vid] = client.list_apps()
+            except Exception as exc:
+                logger.warning(f"Could not discover apps for vendor {vid}: {exc}")
+                apps_by_vendor[vid] = []
+        return apps_by_vendor
 
-    def _common_kwargs(self, config: Mapping[str, Any], apps: List[Dict]) -> Dict:
+    def _common_kwargs(
+        self, config: Mapping[str, Any], apps_by_vendor: Dict[str, List[Dict]]
+    ) -> Dict:
         """Common kwargs passed to every stream constructor."""
         return dict(
-            key_id          = config["key_id"],
-            issuer_id       = config["issuer_id"],
-            private_key     = config["private_key"],
             vendors         = config["vendors"],
-            apps            = apps,
+            apps_by_vendor  = apps_by_vendor,
             start_date      = config["start_date"],
             lookback_days   = config.get("lookback_days") or DEFAULT_LOOKBACK_DAYS,
             get_last_x_days = config.get("get_last_x_days") or DEFAULT_GET_LAST_X_DAYS,
@@ -55,50 +70,44 @@ class SourceAppleAppStore(AbstractSource):
         config: Mapping[str, Any],
     ) -> Tuple[bool, Optional[str]]:
         """
-        Validate credentials and discover apps.
-        Client is created here (check is allowed to create client per §3.1).
+        Validate credentials for every vendor by listing its apps.
+        Each vendor uses its own key_id / issuer_id / private_key.
         """
-        try:
-            client = self._build_client(config)
+        vendors = config.get("vendors", [])
+        if not vendors:
+            return False, "No vendors configured. Add at least one vendor."
 
-            # 1. Validate JWT + API key by fetching apps
-            apps = client.list_apps()
-            if not apps:
-                return False, "Connection succeeded but no apps found for this account."
+        for vendor in vendors:
+            vid   = vendor.get("vendor_id", "?")
+            vname = vendor.get("vendor_name", vid)
+            try:
+                client = AppStoreClient(
+                    key_id=vendor["key_id"],
+                    issuer_id=vendor["issuer_id"],
+                    private_key=vendor["private_key"],
+                )
+                apps = client.list_apps()
+                logger.info(f"Vendor '{vname}' ({vid}) OK — found {len(apps)} app(s).")
+            except KeyError as exc:
+                return False, f"Vendor '{vname}' is missing required field: {exc}"
+            except Exception as exc:
+                return False, f"Vendor '{vname}' ({vid}) failed: {exc}"
 
-            # 2. Validate at least one vendor exists
-            vendors = config.get("vendors", [])
-            if not vendors:
-                return False, "No vendors configured. Add at least one vendor."
-
-            logger.info(
-                f"Connection OK. Found {len(apps)} app(s) and {len(vendors)} vendor(s)."
-            )
-            return True, None
-
-        except Exception as exc:
-            return False, str(exc)
+        return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         """
         Returns all stream instances.
-        Apps are discovered once here and shared across analytics streams.
-        streams() is called during discover — lazy client ensures it
-        does NOT fail with invalid credentials (§3.1).
+        Apps are discovered per vendor here and shared across analytics streams.
+        Discovery failures are tolerated (empty app list) so `discover` works
+        even with placeholder credentials.
         """
-        # Discover apps for analytics streams (only called during actual sync)
-        # During discover, streams() must not call the API → use empty list
-        # Apps will be fetched lazily via check_connection before actual sync.
-        # To keep discover safe, we pass empty apps list;
-        # source.read() calls check_connection first which validates.
         try:
-            client = self._build_client(config)
-            apps   = client.list_apps()
+            apps_by_vendor = self._discover_apps_by_vendor(config["vendors"])
         except Exception:
-            # discover must not fail → return empty app list
-            apps = []
+            apps_by_vendor = {}
 
-        kwargs = self._common_kwargs(config, apps)
+        kwargs = self._common_kwargs(config, apps_by_vendor)
 
         return [
             SummarySalesStream(**kwargs),

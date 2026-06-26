@@ -4,76 +4,73 @@ connectionSpecification:
   title: Apple App Store
   type: object
   required:
-    - key_id
-    - issuer_id
-    - private_key
     - vendors
     - start_date
   properties:
 
-    key_id:
-      title: Key ID
-      description: >
-        Your API key ID from the API Keys page in App Store Connect.
-        Example: 2X9R4HXF34.
-        Ref: https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api
-      order: 0
-      type: string
-      airbyte_secret: true
-
-    issuer_id:
-      title: Issuer ID
-      description: >
-        Your Issuer ID from the API Keys page in App Store Connect.
-        Example: 57246542-96fe-1a63-e053-0824d011072a.
-      order: 1
-      type: string
-      airbyte_secret: true
-
-    private_key:
-      title: Private Key
-      description: >
-        Full content of the .p8 file downloaded from App Store Connect.
-        Copy everything including -----BEGIN PRIVATE KEY-----
-        and -----END PRIVATE KEY----- lines.
-      order: 2
-      type: string
-      multiline: true
-      airbyte_secret: true
-
     vendors:
       title: Vendors
       description: >
-        List of vendors to sync. Each vendor requires a Vendor ID
-        (numeric ID from Payments and Financial Reports) and a
-        Vendor Name (display name you choose).
-      order: 3
+        List of vendors (Apple Developer accounts) to sync. Each vendor has
+        its own Vendor ID and API credentials (Key ID, Issuer ID, Private Key),
+        since these differ per Apple Developer account.
+      order: 0
       type: array
       items:
         type: object
         required:
           - vendor_id
           - vendor_name
+          - key_id
+          - issuer_id
+          - private_key
         properties:
           vendor_id:
             title: Vendor ID
             description: >
-              Numeric Vendor ID from App Store Connect → Payments and
-              Financial Reports → top left corner. Example: 1234567.
+              Numeric Vendor ID from App Store Connect, Payments and
+              Financial Reports, top left corner. Example: 1234567.
+            order: 0
             type: string
           vendor_name:
             title: Vendor Name
             description: Display name for this vendor (your choice).
+            order: 1
             type: string
+          key_id:
+            title: Key ID
+            description: >
+              API key ID from the API Keys page in App Store Connect.
+              Example: 2X9R4HXF34.
+            order: 2
+            type: string
+            airbyte_secret: true
+          issuer_id:
+            title: Issuer ID
+            description: >
+              Issuer ID from the API Keys page in App Store Connect.
+              Example: 57246542-96fe-1a63-e053-0824d011072a.
+            order: 3
+            type: string
+            airbyte_secret: true
+          private_key:
+            title: Private Key
+            description: >
+              Full content of the .p8 file downloaded from App Store Connect.
+              Copy everything including the BEGIN PRIVATE KEY
+              and END PRIVATE KEY lines.
+            order: 4
+            type: string
+            multiline: true
+            airbyte_secret: true
 
     start_date:
       title: Start Date
       description: >
-        Start date for the first sync (YYYY-MM-DD).
-        Apple allows up to 365 days of history from today for Sales reports.
-        Analytics reports (app_installations, app_sessions) are available
-        from January 1, 2024.
-      order: 4
+        Start date for the first sync (YYYY-MM-DD). Apple allows up to
+        365 days of history from today for Sales reports. Analytics reports
+        (app_installations, app_sessions) are available from January 1, 2024.
+      order: 1
       type: string
       format: date
       pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
@@ -85,7 +82,7 @@ connectionSpecification:
         late-arriving data. Minimum recommended: 3 days, because Analytics
         reports (app_installations, app_sessions) are only complete 2 days
         after the reporting date. Default: 7.
-      order: 5
+      order: 2
       type: ["null", "integer"]
       default: 7
       minimum: 1
@@ -94,11 +91,11 @@ connectionSpecification:
     get_last_x_days:
       title: Get Last X Days
       description: >
-        If true, ignores Start Date and cursor — fetches only the last
-        X days (X = lookback_days) from today on every sync.
-        Useful for quick re-syncs or debugging. Does NOT delete existing
-        data in BigQuery (Append+Deduped mode).
-      order: 6
+        If true, ignores Start Date and cursor, fetches only the last
+        X days (X = lookback_days) from today on every sync. Useful for
+        quick re-syncs or debugging. Does NOT delete existing data in
+        BigQuery (Append+Deduped mode).
+      order: 3
       type: ["null", "boolean"]
       default: false
 
@@ -106,8 +103,8 @@ connectionSpecification:
       title: Timezone
       description: >
         Your local timezone for date calculations. Default: UTC.
-        Note: Apple Sales & Financial reports use Pacific Time (PT).
+        Note: Apple Sales and Financial reports use Pacific Time (PT).
         See https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-      order: 7
+      order: 4
       type: ["null", "string"]
       default: "UTC"
