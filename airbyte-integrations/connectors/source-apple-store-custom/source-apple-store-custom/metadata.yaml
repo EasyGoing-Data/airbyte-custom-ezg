@@ -1,0 +1,10 @@
+data:
+  name: Apple App Store
+  connectorType: source
+  connectorSubtype: api
+  dockerRepository: dataezg/source-apple-store-custom
+  dockerImageTag: 0.1.0
+  license: MIT
+  documentationUrl: https://developer.apple.com/documentation/appstoreconnectapi
+  tags:
+    - DA

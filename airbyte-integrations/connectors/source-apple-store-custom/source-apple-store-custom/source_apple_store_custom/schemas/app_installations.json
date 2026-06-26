@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "description": "App Store install and delete activity (Standard report). Ref: https://developer.apple.com/documentation/analytics-reports/app-installs",
+  "properties": {
+    "vendor_id":          { "type": ["null", "string"], "description": "Vendor ID from config (metadata)" },
+    "vendor_name":        { "type": ["null", "string"], "description": "Vendor name from config (metadata)" },
+    "date":               { "type": ["null", "string"], "description": "Date on which the event occurred. For weekly/monthly instances, the first day of that week/month" },
+    "app_name":           { "type": ["null", "string"], "description": "Name of the app provided during setup in App Store Connect" },
+    "app_apple_id":       { "type": ["null", "string"], "description": "Your app's Apple ID" },
+    "event":              { "type": ["null", "string"], "description": "Type of install/delete event. Values: Install, Delete, First Time Download, Re-download, Update, Restore from iCloud Backup, Managed Download, In-App Event" },
+    "source_type":        { "type": ["null", "string"], "description": "Where the user discovered your app. Values: App Store Browse, App Store Search, App Referrer, Web Referrer, App Store Sheets, Unavailable, Null" },
+    "territory":          { "type": ["null", "string"], "description": "App Store country or region where the installation or deletion occurred (ISO country code)" },
+    "device":             { "type": ["null", "string"], "description": "Device type on which the event occurred: iPhone, iPad, Desktop, Apple TV, Apple Vision" },
+    "platform_version":   { "type": ["null", "string"], "description": "OS version of the device on which the app was installed or deleted" },
+    "count":              { "type": ["null", "string"], "description": "Total count of events from users who opted to share data with Apple and developers" },
+    "unique_devices":     { "type": ["null", "string"], "description": "Number of unique devices on which events were generated from opted-in users" },
+    "synced_at":          { "type": ["null", "string"], "format": "date-time", "description": "Timestamp when Airbyte synced this record (metadata)" }
+  }
+}

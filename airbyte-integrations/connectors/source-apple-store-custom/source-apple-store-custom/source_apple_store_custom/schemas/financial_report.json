@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "description": "Monthly actual proceeds after Apple commission and taxes. Ref: https://developer.apple.com/help/app-store-connect/reference/reporting/financial-report-fields",
+  "properties": {
+    "vendor_id":                        { "type": ["null", "string"], "description": "Vendor ID from config (metadata)" },
+    "vendor_name":                      { "type": ["null", "string"], "description": "Vendor name from config (metadata)" },
+    "Start Date":                       { "type": ["null", "string"], "description": "Period start date based on Apple fiscal calendar (MM/DD/YYYY). Ref: https://appstoreconnect.apple.com/WebObjects/iTunesConnect.woa/wa/jumpTo?page=fiscalcalendar" },
+    "End Date":                         { "type": ["null", "string"], "description": "Period end date based on Apple fiscal calendar (MM/DD/YYYY)" },
+    "UPC":                              { "type": ["null", "string"], "description": "Not applicable to developers; always blank" },
+    "ISRC / ISBN":                      { "type": ["null", "string"], "description": "SKU for apps; Product ID for In-App Purchases" },
+    "Vendor Identifier":                { "type": ["null", "string"], "description": "SKU for apps or Product ID for In-App Purchases" },
+    "Quantity":                         { "type": ["null", "string"], "description": "Aggregated number of units sold. Positive or negative (returns)" },
+    "Partner Share":                    { "type": ["null", "string"], "description": "Proceeds you receive per unit after taxes and Apple commission. Always positive" },
+    "Extended Partner Share":           { "type": ["null", "string"], "description": "Quantity × Partner Share = total actual proceeds received. Positive or negative" },
+    "Partner Share Currency":           { "type": ["null", "string"], "description": "Three-character ISO code for the currency of proceeds. Ref: https://developer.apple.com/help/app-store-connect/reference/reporting/currency-codes" },
+    "Sale or Return":                   { "type": ["null", "string"], "description": "S = Sale, R = Return" },
+    "Apple Identifier":                 { "type": ["null", "string"], "description": "Unique Apple ID automatically generated for your app" },
+    "Artist / Show / Developer / Author":{ "type": ["null", "string"], "description": "Your legal entity name" },
+    "Title":                            { "type": ["null", "string"], "description": "Name of app or IAP Product ID" },
+    "Label / Studio / Network / Developer / Publisher": { "type": ["null", "string"], "description": "Not applicable to developers; always blank" },
+    "Grid":                             { "type": ["null", "string"], "description": "Not applicable to developers; always blank" },
+    "Product Type Identifier":          { "type": ["null", "string"], "description": "Type of product purchased. Ref: https://developer.apple.com/help/app-store-connect/reference/reporting/product-type-identifiers" },
+    "ISAN / Other Identifier":          { "type": ["null", "string"], "description": "Advanced Commerce API SKU; blank for standard apps" },
+    "Country of Sale":                  { "type": ["null", "string"], "description": "Two-character ISO code of App Store where purchase occurred, based on customer Apple Account" },
+    "Pre-order Flag":                   { "type": ["null", "string"], "description": "P if purchase originated from pre-order; null otherwise" },
+    "Promo Code":                       { "type": ["null", "string"], "description": "Promotional code if transaction was part of a promotion; blank otherwise" },
+    "Customer Price":                   { "type": ["null", "string"], "description": "Price per unit billed to customer inclusive of applicable taxes" },
+    "Customer Currency":                { "type": ["null", "string"], "description": "Three-character ISO code for currency paid by customer" },
+    "synced_at":                        { "type": ["null", "string"], "format": "date-time", "description": "Timestamp when Airbyte synced this record (metadata)" }
+  }
+}

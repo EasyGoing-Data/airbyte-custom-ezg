@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "airbyte-integrations-ezg"
+version = "0.1.0"
+description = "Shared dev environment for all EasyGoing custom connectors"
+package-mode = false   # không package — chỉ dùng để quản lý venv local
+ 
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+ 
+# ── Airbyte CDK (dùng chung mọi connector) ───────────────────────────────────
+airbyte-cdk = "^7.0"
+ 
+# ── source-apple-store-custom ─────────────────────────────────────────────────
+PyJWT    = "^2.8"
+requests = "^2.31"
+pytz     = "^2024.1"
+ 
+# ── source-google-play-console ────────────────────────────────────────────────
+google-cloud-storage = "^2.10"
+ 
+# ── source-google-analytics ───────────────────────────────────────────────────
+google-analytics-data = "^0.18"
+google-auth           = "^2.0"
+ 
+[build-system]
+requires      = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+ 

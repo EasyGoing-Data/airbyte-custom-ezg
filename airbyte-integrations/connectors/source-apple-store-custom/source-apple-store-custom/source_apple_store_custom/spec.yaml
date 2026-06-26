@@ -1,0 +1,113 @@
+documentationUrl: https://developer.apple.com/documentation/appstoreconnectapi
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Apple App Store
+  type: object
+  required:
+    - key_id
+    - issuer_id
+    - private_key
+    - vendors
+    - start_date
+  properties:
+
+    key_id:
+      title: Key ID
+      description: >
+        Your API key ID from the API Keys page in App Store Connect.
+        Example: 2X9R4HXF34.
+        Ref: https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api
+      order: 0
+      type: string
+      airbyte_secret: true
+
+    issuer_id:
+      title: Issuer ID
+      description: >
+        Your Issuer ID from the API Keys page in App Store Connect.
+        Example: 57246542-96fe-1a63-e053-0824d011072a.
+      order: 1
+      type: string
+      airbyte_secret: true
+
+    private_key:
+      title: Private Key
+      description: >
+        Full content of the .p8 file downloaded from App Store Connect.
+        Copy everything including -----BEGIN PRIVATE KEY-----
+        and -----END PRIVATE KEY----- lines.
+      order: 2
+      type: string
+      multiline: true
+      airbyte_secret: true
+
+    vendors:
+      title: Vendors
+      description: >
+        List of vendors to sync. Each vendor requires a Vendor ID
+        (numeric ID from Payments and Financial Reports) and a
+        Vendor Name (display name you choose).
+      order: 3
+      type: array
+      items:
+        type: object
+        required:
+          - vendor_id
+          - vendor_name
+        properties:
+          vendor_id:
+            title: Vendor ID
+            description: >
+              Numeric Vendor ID from App Store Connect → Payments and
+              Financial Reports → top left corner. Example: 1234567.
+            type: string
+          vendor_name:
+            title: Vendor Name
+            description: Display name for this vendor (your choice).
+            type: string
+
+    start_date:
+      title: Start Date
+      description: >
+        Start date for the first sync (YYYY-MM-DD).
+        Apple allows up to 365 days of history from today for Sales reports.
+        Analytics reports (app_installations, app_sessions) are available
+        from January 1, 2024.
+      order: 4
+      type: string
+      format: date
+      pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+
+    lookback_days:
+      title: Lookback Days
+      description: >
+        Number of days to re-fetch on each incremental sync to capture
+        late-arriving data. Minimum recommended: 3 days, because Analytics
+        reports (app_installations, app_sessions) are only complete 2 days
+        after the reporting date. Default: 7.
+      order: 5
+      type: ["null", "integer"]
+      default: 7
+      minimum: 1
+      maximum: 45
+
+    get_last_x_days:
+      title: Get Last X Days
+      description: >
+        If true, ignores Start Date and cursor — fetches only the last
+        X days (X = lookback_days) from today on every sync.
+        Useful for quick re-syncs or debugging. Does NOT delete existing
+        data in BigQuery (Append+Deduped mode).
+      order: 6
+      type: ["null", "boolean"]
+      default: false
+
+    timezone:
+      title: Timezone
+      description: >
+        Your local timezone for date calculations. Default: UTC.
+        Note: Apple Sales & Financial reports use Pacific Time (PT).
+        See https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      order: 7
+      type: ["null", "string"]
+      default: "UTC"

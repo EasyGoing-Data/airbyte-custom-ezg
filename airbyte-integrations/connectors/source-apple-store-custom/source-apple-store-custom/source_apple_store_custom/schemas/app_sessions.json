@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "description": "Session counts and average session duration (Standard report). active_devices is the closest proxy to Daily Active Users. Ref: https://developer.apple.com/documentation/analytics-reports/app-sessions",
+  "properties": {
+    "vendor_id":                { "type": ["null", "string"], "description": "Vendor ID from config (metadata)" },
+    "vendor_name":              { "type": ["null", "string"], "description": "Vendor name from config (metadata)" },
+    "date":                     { "type": ["null", "string"], "description": "Date on which the sessions occurred. For weekly/monthly instances, the first day of that week/month" },
+    "app_name":                 { "type": ["null", "string"], "description": "Name of the app provided during setup in App Store Connect" },
+    "app_apple_id":             { "type": ["null", "string"], "description": "Your app's Apple ID" },
+    "source_type":              { "type": ["null", "string"], "description": "Where the user originally discovered your app. Values: App Store Browse, App Store Search, App Referrer, Web Referrer, Unavailable" },
+    "device":                   { "type": ["null", "string"], "description": "Device type: iPhone, iPad, Desktop, Apple TV, Apple Vision" },
+    "territory":                { "type": ["null", "string"], "description": "App Store country or region where sessions occurred (ISO country code)" },
+    "platform_version":         { "type": ["null", "string"], "description": "OS version of the device on which sessions occurred" },
+    "sessions":                 { "type": ["null", "string"], "description": "Total number of times the app was opened during the period, from opted-in users" },
+    "active_devices":           { "type": ["null", "string"], "description": "Number of unique devices with at least one session — closest proxy to Daily Active Users (DAU)" },
+    "average_session_duration": { "type": ["null", "string"], "description": "Average duration of sessions in seconds during the period" },
+    "synced_at":                { "type": ["null", "string"], "format": "date-time", "description": "Timestamp when Airbyte synced this record (metadata)" }
+  }
+}

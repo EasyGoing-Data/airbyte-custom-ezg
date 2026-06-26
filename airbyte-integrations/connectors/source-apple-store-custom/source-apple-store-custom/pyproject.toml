@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "source-apple-store-custom"
+version = "0.1.0"
+packages = [{ include = "source_apple_store_custom" }]
+include = ["source_apple_store_custom/schemas/*.json"]   # ⚠️ bắt buộc để schemas vào image
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"     # KHÔNG dùng "^3.11" — chặn 3.12+
+airbyte-cdk = "^7.0"
+PyJWT = "^2.8"
+requests = "^2.31"
+pytz = "^2024.1"
+
+[tool.poetry.scripts]
+source-apple-store-custom = "source_apple_store_custom.run:run"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
