@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+secrets/config.json
+sa*.json
+service_account*.json
+*-credentials.json
+easygoing-data-*.json

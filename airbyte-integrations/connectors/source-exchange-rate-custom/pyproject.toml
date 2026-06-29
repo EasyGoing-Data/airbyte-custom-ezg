@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "source-exchange-rate-custom"
+version = "0.1.0"
+packages = [{ include = "source_exchange_rate_custom" }]
+include = ["source_exchange_rate_custom/schemas/*.json"]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+airbyte-cdk = "^7.0"
+requests = "^2.31"
+
+[tool.poetry.scripts]
+source-exchange-rate-custom = "source_exchange_rate_custom.run:run"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

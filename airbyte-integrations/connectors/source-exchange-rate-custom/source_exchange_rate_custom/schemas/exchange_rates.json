@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "base": { "type": ["null", "string"] },
+    "date": { "type": ["null", "string"] },
+    "currency": { "type": ["null", "string"] },
+    "rate": { "type": ["null", "string"] },
+    "timestamp": { "type": ["null", "string"] },
+    "synced_at": { "type": ["null", "string"], "format": "date-time" }
+  }
+}

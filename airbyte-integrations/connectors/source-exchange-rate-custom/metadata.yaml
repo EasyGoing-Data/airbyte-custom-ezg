@@ -1,0 +1,9 @@
+metadataSpecVersion: "1.0"
+data:
+  name: Exchange Rate Custom
+  definitionId: source-exchange-rate-custom
+  connectorType: source
+  dockerRepository: dataezg/source-exchange-rate-custom
+  dockerImageTag: "0.1.0"
+  license: MIT
+  documentationUrl: https://docs.openexchangerates.org
