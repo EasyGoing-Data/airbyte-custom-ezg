@@ -83,7 +83,7 @@ connectionSpecification:
         reports (app_installations, app_sessions) are only complete 2 days
         after the reporting date. Default: 7.
       order: 2
-      type: ["null", "integer"]
+      type: ["null", "integer", "string"]
       default: 7
       minimum: 1
       maximum: 45
@@ -103,7 +103,6 @@ connectionSpecification:
       title: Timezone
       description: >
         Your local timezone for date calculations. Default: UTC.
-        Note: Apple Sales and Financial reports use Pacific Time (PT).
         See https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
       order: 4
       type: ["null", "string"]

@@ -27,6 +27,25 @@ DEFAULT_GET_LAST_X_DAYS = False
 DEFAULT_TIMEZONE        = "UTC"
 
 
+def _to_int(value: Any, default: int) -> int:
+    """Cast config value to int. Airbyte Builder UI may send '7' as string."""
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _to_bool(value: Any, default: bool = False) -> bool:
+    """Cast config value to bool. Builder UI may send 'false' as string."""
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "yes")
+
+
 class SourceAppleAppStore(AbstractSource):
 
     def _discover_apps_by_vendor(
@@ -59,8 +78,8 @@ class SourceAppleAppStore(AbstractSource):
             vendors         = config["vendors"],
             apps_by_vendor  = apps_by_vendor,
             start_date      = config["start_date"],
-            lookback_days   = config.get("lookback_days") or DEFAULT_LOOKBACK_DAYS,
-            get_last_x_days = config.get("get_last_x_days") or DEFAULT_GET_LAST_X_DAYS,
+            lookback_days   = _to_int(config.get("lookback_days"), DEFAULT_LOOKBACK_DAYS),
+            get_last_x_days = _to_bool(config.get("get_last_x_days"), DEFAULT_GET_LAST_X_DAYS),
             timezone        = config.get("timezone") or DEFAULT_TIMEZONE,
         )
 
