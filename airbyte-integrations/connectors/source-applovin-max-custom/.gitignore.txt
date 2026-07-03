@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+build/
+*.egg-info/
+secrets/
+sa*.json
+service_account*.json
+*-credentials.json

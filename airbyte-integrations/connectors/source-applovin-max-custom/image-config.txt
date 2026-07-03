@@ -1,0 +1,1 @@
+["python","/airbyte/integration_code/main.py"] ["PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","LANG=C.UTF-8","GPG_KEY=E3FF2839C048B25C084DEBE9B26995E310250568","PYTHON_VERSION=3.9.25","PYTHON_SHA256=00e07d7c0f2f0cc002432d1ee84d2a40dae404a99303e3f97701c10966c91834","AIRBYTE_ENTRYPOINT=python /airbyte/integration_code/main.py"]
