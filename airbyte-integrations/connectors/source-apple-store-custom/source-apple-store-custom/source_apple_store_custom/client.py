@@ -165,18 +165,7 @@ class AppStoreClient:
     def parse_gzip_tsv(self, content: bytes) -> List[Dict[str, Optional[str]]]:
         """
         Parse gzip TSV bytes into list of dicts.
-        Tries utf-8-sig first (Apple default), falls back to utf-16.
-
-        NOTE: Apple Financial Reports contain MULTIPLE sections in one file:
-          Section 1 — transaction data (the rows we want)
-          <blank line>
-          Section 2 — a per-country summary with its OWN header
-                       ("Country Of Sale", "Partner Share Currency", ...)
-                       plus a "Total_Rows" line.
-        We stop at the first blank line so section 2 is not mis-parsed
-        against section 1's header (which caused country codes to land in
-        _Start_Date_ etc.). Sales/Analytics reports have no blank line, so
-        this is a no-op for them.
+        Đã sửa lỗi dính ký tự \r và chặn đứng Section 2 bằng dòng trống + số lượng cột.
         """
         if not content:
             return []
@@ -195,30 +184,29 @@ class AppStoreClient:
         if not lines:
             return []
 
-        headers = lines[0].rstrip("\n").split("\t")
+        # 👉 ĐOẠN 1: Sửa rstrip("\r\n") cho Header để cột cuối cùng không bị dính ký tự ẩn \r
+        headers = lines[0].rstrip("\r\n").split("\t")
+        expected_cols = len(headers)
         records: List[Dict] = []
 
         for line in lines[1:]:
-            # ── Stop at the end of the primary data section ──────────────────
-            # Apple Financial Reports append a section 2 (per-country summary +
-            # "Total_Rows"). Three guards, cheapest first:
-            #   1. Blank line, or a line that is only tabs/spaces (strip() = "").
-            #   2. Section 2's own header ("Country Of Sale" / "Partner Share
-            #      Currency") in case Apple omits the blank separator.
-            #   3. The trailing "Total_Rows" summary line.
-            # NOTE: match "Total_Rows" exactly — do NOT use startswith("Total"),
-            # which would wrongly cut a legit SKU/title beginning with "Total".
-            if not line.strip():
-                break
-            if "Country Of Sale" in line or "Partner Share Currency" in line:
-                break
-            if "Total_Rows" in line:
+            # 👉 ĐOẠN 2: Làm sạch \r\n ở đầu mỗi dòng dữ liệu
+            clean_line = line.rstrip("\r\n")
+            
+            # 👉 ĐOẠN 3: Dừng hẳn khi gặp dòng trống phân cách giữa 2 Section (Cách của bạn)
+            if not clean_line.strip():
+                break             
+            
+            values = clean_line.split("\t")
+            
+            # 👉 ĐOẠN 4: Lớp bảo hiểm phòng hờ nếu Apple bỏ dòng trống (Lệch số cột là dừng luôn)
+            if len(values) != expected_cols:
                 break
 
-            values = line.rstrip("\r\n").split("\t")
+            # Map dữ liệu an toàn dựa trên số lượng cột tiêu chuẩn của Header
             record = {
                 headers[i]: (values[i].strip() if i < len(values) and values[i] is not None else None)
-                for i in range(len(headers))
+                for i in range(expected_cols)
             }
             records.append(record)
 
