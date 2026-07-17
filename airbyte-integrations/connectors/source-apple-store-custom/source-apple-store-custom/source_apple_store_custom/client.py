@@ -108,7 +108,10 @@ class AppStoreClient:
 
                 if resp.status_code == 200:
                     return resp
-                if resp.status_code == 404 and allow_404:
+                if resp.status_code in (404, 410) and allow_404:
+                    # 404 = no report for this date; 410 = date older than
+                    # Apple's retention window (Sales API keeps ~365 days).
+                    # Both mean "no data" → caller treats as empty, not error.
                     return resp
                 if resp.status_code == 429:
                     wait = BACKOFF_BASE ** attempt
@@ -127,7 +130,7 @@ class AppStoreClient:
 
         raise RuntimeError(f"GET failed after {MAX_RETRIES} retries: {url}")
 
-    def _post(self, url: str, body: Dict) -> requests.Response:
+    def _post(self, url: str, body: Dict, allow_403: bool = False) -> requests.Response:
         """POST with retry."""
         for attempt in range(MAX_RETRIES):
             try:
@@ -135,6 +138,10 @@ class AppStoreClient:
                     url, headers=self._auth_headers(), json=body, timeout=60
                 )
                 if resp.status_code in (200, 201):
+                    return resp
+                if resp.status_code == 403 and allow_403:
+                    # Analytics requires Admin role to create report requests.
+                    # If the key lacks it, skip gracefully instead of crashing.
                     return resp
                 if resp.status_code == 429:
                     wait = BACKOFF_BASE ** attempt
@@ -159,6 +166,17 @@ class AppStoreClient:
         """
         Parse gzip TSV bytes into list of dicts.
         Tries utf-8-sig first (Apple default), falls back to utf-16.
+
+        NOTE: Apple Financial Reports contain MULTIPLE sections in one file:
+          Section 1 — transaction data (the rows we want)
+          <blank line>
+          Section 2 — a per-country summary with its OWN header
+                       ("Country Of Sale", "Partner Share Currency", ...)
+                       plus a "Total_Rows" line.
+        We stop at the first blank line so section 2 is not mis-parsed
+        against section 1's header (which caused country codes to land in
+        _Start_Date_ etc.). Sales/Analytics reports have no blank line, so
+        this is a no-op for them.
         """
         if not content:
             return []
@@ -181,11 +199,25 @@ class AppStoreClient:
         records: List[Dict] = []
 
         for line in lines[1:]:
+            # ── Stop at the end of the primary data section ──────────────────
+            # Apple Financial Reports append a section 2 (per-country summary +
+            # "Total_Rows"). Three guards, cheapest first:
+            #   1. Blank line, or a line that is only tabs/spaces (strip() = "").
+            #   2. Section 2's own header ("Country Of Sale" / "Partner Share
+            #      Currency") in case Apple omits the blank separator.
+            #   3. The trailing "Total_Rows" summary line.
+            # NOTE: match "Total_Rows" exactly — do NOT use startswith("Total"),
+            # which would wrongly cut a legit SKU/title beginning with "Total".
             if not line.strip():
-                continue
-            values = line.rstrip("\n").split("\t")
+                break
+            if "Country Of Sale" in line or "Partner Share Currency" in line:
+                break
+            if "Total_Rows" in line:
+                break
+
+            values = line.rstrip("\r\n").split("\t")
             record = {
-                headers[i]: (values[i] if i < len(values) else None)
+                headers[i]: (values[i].strip() if i < len(values) and values[i] is not None else None)
                 for i in range(len(headers))
             }
             records.append(record)
@@ -264,11 +296,12 @@ class AppStoreClient:
 
     # ─── Analytics API — 5-step flow ─────────────────────────────────────────
 
-    def create_analytics_request(self, app_id: str, access_type: str) -> str:
+    def create_analytics_request(self, app_id: str, access_type: str) -> Optional[str]:
         """
         Step 1 — Create ONGOING or ONE_TIME_SNAPSHOT request for an app.
         access_type: "ONGOING" | "ONE_TIME_SNAPSHOT"
-        Returns request_id (stable, reuse forever for ONGOING).
+        Returns request_id (stable, reuse forever for ONGOING), or None if the
+        API key lacks Admin role (403) — analytics streams are skipped then.
         Ref: https://developer.apple.com/documentation/appstoreconnectapi/post-v1-analyticsreportrequests
         """
         resp = self._post(
@@ -282,7 +315,15 @@ class AppStoreClient:
                     },
                 }
             },
+            allow_403=True,
         )
+        if resp.status_code == 403:
+            logger.warning(
+                f"403 Forbidden creating {access_type} analytics request for app "
+                f"{app_id}. The API key likely lacks Admin role — skipping "
+                f"analytics streams. Sales/Finance streams are unaffected."
+            )
+            return None
         request_id = resp.json()["data"]["id"]
         logger.info(f"Created {access_type} request {request_id} for app {app_id}.")
         return request_id
@@ -379,6 +420,11 @@ class AppStoreClient:
         # ── Ensure ONGOING request exists ────────────────────────────────────
         if not ongoing_request_id:
             ongoing_request_id = self.create_analytics_request(app_id, "ONGOING")
+
+        # If we still have no ONGOING request, the key lacks Admin role (403).
+        # Skip analytics entirely — return empty, leave state untouched.
+        if not ongoing_request_id:
+            return [], None, snapshot_request_id, snapshot_done
 
         # ── Create ONE_TIME_SNAPSHOT for backfill (once) ─────────────────────
         if not snapshot_done and not snapshot_request_id:
