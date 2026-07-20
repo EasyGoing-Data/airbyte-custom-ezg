@@ -1,0 +1,3 @@
+airbyte_cdk
+source_declarative_manifest
+unit_tests

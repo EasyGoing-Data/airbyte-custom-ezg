@@ -14,4 +14,4 @@ ENV AIRBYTE_ENTRYPOINT="python /airbyte/integration_code/main.py"
 ENTRYPOINT ["python", "/airbyte/integration_code/main.py"]
 
 LABEL io.airbyte.name=dataezg/source-applovin-max
-LABEL io.airbyte.version=1.7.0
+LABEL io.airbyte.version=1.8.0

@@ -1,11 +1,19 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
+# v1.8.0 — Multi-account (playbook §I):
+#   - spec: accounts = array {account_name, api_key} thay cho api_key don
+#   - app discovery per-account, try/except de discover khong chet khi 1 account loi
+#   - slices: date x account x app; record co them cot account_name
+#   - check_connection validate TUNG account, bao ro account nao fail
+#   - giu nguyen 5 FIX cua v1.7.0 (cursor khong +1, clamp <= today,
+#     warning list app rong, bo "or [None]", guard slice None)
 
 from abc import ABC
 import datetime
+import logging
 import pendulum
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import requests
 from airbyte_cdk.sources import AbstractSource
@@ -15,6 +23,30 @@ from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_cdk.models import SyncMode
 import pandas as pd
 import numpy as np
+
+logger = logging.getLogger("airbyte")
+
+DEFAULT_LOOKBACK_DAYS = 7
+DEFAULT_TIMEZONE = "UTC"
+
+
+def _to_int(value: Any, default: int) -> int:
+    """Cast config value to int. UI may send '7' as string. (dong nhat apple-store-custom)"""
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _to_bool(value: Any, default: bool = False) -> bool:
+    """Cast config value to bool. UI may send 'false' as string. (dong nhat apple-store-custom)"""
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "yes")
 
 
 """ Base Stream """
@@ -44,11 +76,15 @@ class ApplovinMaxStream(HttpStream, ABC):
         return None
 
 
-""" Check connection + app discovery """
+""" Check connection + app discovery (per account) """
 
 
 class ApplovinMaxCheckConnection(ApplovinMaxStream):
     primary_key = None
+
+    def __init__(self, config: Mapping[str, Any], api_key: str, *args, **kwargs):
+        super().__init__(config=config, *args, **kwargs)
+        self._api_key = api_key
 
     def path(self, stream_state=None, stream_slice=None, next_page_token=None) -> str:
         return "maxReport"
@@ -59,7 +95,7 @@ class ApplovinMaxCheckConnection(ApplovinMaxStream):
         return {
             "start": start_date,
             "end": today,
-            "api_key": self.config["api_key"],
+            "api_key": self._api_key,
             "format": "json",
             "columns": "package_name,platform",
         }
@@ -75,13 +111,18 @@ class ApplovinMaxCheckConnection(ApplovinMaxStream):
 class ApplovinMaxUserLevelAdImpressionReport(ApplovinMaxStream, IncrementalMixin):
     primary_key = None
 
-    def __init__(self, list_app, **kwargs):
+    def __init__(self, accounts: List[Dict], apps_by_account: Dict[str, List[Dict]], **kwargs):
         super().__init__(**kwargs)
         self._cursor_value = None
-        self.number_days_backward = self.config.get("number_days_backward", 7)
-        self.timezone = self.config.get("timezone", "UTC")
-        self.get_last_X_days = self.config.get("get_last_X_days", False)
-        self.list_app = list_app
+        self.number_days_backward = _to_int(self.config.get("number_days_backward"), DEFAULT_LOOKBACK_DAYS)
+        self.timezone = self.config.get("timezone") or DEFAULT_TIMEZONE
+        self.get_last_X_days = _to_bool(self.config.get("get_last_X_days"), False)
+        # accounts: [{account_name, api_key}]  (§I: auth nam trong tung account)
+        self.accounts = accounts
+        # apps_by_account: {account_name: [{package_name, platform}]}
+        self.apps_by_account = apps_by_account
+        # KHONG dua api_key vao stream_slice (slice bi log ra stdout) — tra key theo account_name
+        self._keys_by_account = {a.get("account_name"): a.get("api_key") for a in accounts}
         self._raise_on_http_errors = True
         self._current_slice = {}
 
@@ -128,40 +169,43 @@ class ApplovinMaxUserLevelAdImpressionReport(ApplovinMaxStream, IncrementalMixin
         else:
             start_date = pendulum.parse(self.config["start_date"]).date()
 
-        # Chot an toan: API chi cho phep 45 ngay gan nhat
-        earliest_allowed = pendulum.today(self.timezone).subtract(days=45).date()
-        if start_date < earliest_allowed:
-            self.logger.info(f"start_date {start_date} qua 45 ngay -> kep ve {earliest_allowed}")
-            start_date = earliest_allowed
+        # Endpoint user-level (max/userAdRevenueReport) khong dinh gioi han 45 ngay
+        # nhu maxReport (aggregate) -> KHONG kep start_date, cho phep backfill day du.
 
-        # FIX 3: canh bao khi khong co app nao (list_app rong) — truoc day
-        # se sinh slice rong mot cach am tham.
-        if not self.list_app:
-            self.logger.warning("list_app rong — khong co app nao de sync (check API key / maxReport).")
+        # FIX 3: canh bao khi khong co app nao — truoc day se sinh slice rong am tham.
+        if not any(self.apps_by_account.values()):
+            self.logger.warning("Khong discover duoc app nao o moi account (check API key / maxReport).")
 
         while start_date <= data_available_date:
             start_date_as_str = start_date.to_date_string()
-            for app in self.list_app:
-                if not app.get("package_name"):
+            for account in self.accounts:
+                account_name = account.get("account_name")
+                apps = self.apps_by_account.get(account_name, [])
+                if not apps:
                     continue
-                slice.append({
-                    "date": start_date_as_str,
-                    "application": app["package_name"],
-                    "platform": app["platform"],
-                })
+                for app in apps:
+                    if not app.get("package_name"):
+                        continue
+                    slice.append({
+                        "date": start_date_as_str,
+                        "application": app["package_name"],
+                        "platform": app["platform"],
+                        "account_name": account_name,
+                    })
             start_date = start_date.add(days=1)
 
         # FIX 4: bo "or [None]" — slice rong thi tra ve [] de CDK skip sync
         # sach se, thay vi truyen stream_slice=None gay TypeError.
         if not slice:
-            self.logger.info("Khong co slice nao (start_date > today hoac list_app rong) — skip.")
+            self.logger.info("Khong co slice nao (start_date > today hoac khong co app) — skip.")
         return slice
 
     def request_params(self, stream_state, stream_slice=None, next_page_token=None) -> MutableMapping[str, Any]:
         # FIX 5 (phong thu): guard stream_slice=None de khong bao gio
         # crash 'NoneType' object is not iterable lan nua.
-        request_params = dict(stream_slice or {})  # date, application, platform
-        request_params.update({"api_key": self.config["api_key"]})
+        request_params = dict(stream_slice or {})  # date, application, platform, account_name
+        account_name = request_params.pop("account_name", None)
+        request_params.update({"api_key": self._keys_by_account.get(account_name, "")})
         request_params.update({"aggregated": False})
         self.logger.info(f"stream slice {stream_slice}")
         return request_params
@@ -188,12 +232,14 @@ class ApplovinMaxUserLevelAdImpressionReport(ApplovinMaxStream, IncrementalMixin
             return
         app_id = self._current_slice.get("application")
         platform = self._current_slice.get("platform")
+        account_name = self._current_slice.get("account_name")
         for chunk in pd.read_csv(ad_revenue_report_url, chunksize=100000):
             chunk.rename(columns=lambda x: x.replace(" ", "_").lower(), inplace=True)
             chunk.replace([np.nan, np.inf, -np.inf], None, inplace=True)
             for record in chunk.to_dict(orient="records"):
                 record["app_id"] = app_id
                 record["platform"] = platform
+                record["account_name"] = account_name
                 yield record
 
     def get_json_schema(self) -> Mapping[str, Any]:
@@ -203,6 +249,7 @@ class ApplovinMaxUserLevelAdImpressionReport(ApplovinMaxStream, IncrementalMixin
             "required": [],
             "additionalProperties": True,
             "properties": {
+                "account_name": {"type": ["null", "string"]},
                 "app_id": {"type": ["null", "string"]},
                 "platform": {"type": ["null", "string"]},
                 "date": {"type": ["null", "string"]},
@@ -239,8 +286,8 @@ class ApplovinMaxUserLevelAdImpressionReport(ApplovinMaxStream, IncrementalMixin
 
 # Source
 class SourceApplovinMax(AbstractSource):
-    def _get_list_app(self, config) -> List[Mapping[str, Any]]:
-        check_stream = ApplovinMaxCheckConnection(config=config)
+    def _get_list_app(self, config, api_key: str) -> List[Mapping[str, Any]]:
+        check_stream = ApplovinMaxCheckConnection(config=config, api_key=api_key)
         records = check_stream.read_records(sync_mode="full_refresh")
         results = next(records)  # list of dicts: {package_name, platform}
         apps = []
@@ -257,14 +304,43 @@ class SourceApplovinMax(AbstractSource):
             apps.append({"package_name": package_name, "platform": platform})
         return apps
 
+    def _discover_apps_by_account(self, config) -> Dict[str, List[Mapping[str, Any]]]:
+        """
+        Discover apps cho TUNG account bang key rieng cua no (§I).
+        Boc try/except de discover khong chet khi 1 account loi
+        (fake key van ra catalog — tranh "No catalog found", §3.1/§11).
+        """
+        apps_by_account: Dict[str, List[Mapping[str, Any]]] = {}
+        for account in config.get("accounts", []):
+            account_name = account.get("account_name", "?")
+            try:
+                apps_by_account[account_name] = self._get_list_app(config, account["api_key"])
+            except Exception as exc:
+                logger.warning(f"Khong discover duoc apps cho account '{account_name}': {exc}")
+                apps_by_account[account_name] = []
+        return apps_by_account
+
     def check_connection(self, logger, config) -> Tuple[bool, any]:
-        try:
-            apps = self._get_list_app(config)
-            logger.info(f"Discovered {len(apps)} app(s): {apps}")
-            return True, None
-        except Exception as e:
-            return False, e
+        accounts = config.get("accounts", [])
+        if not accounts:
+            return False, "No accounts configured. Add at least one account."
+        for account in accounts:
+            account_name = account.get("account_name", "?")
+            try:
+                apps = self._get_list_app(config, account["api_key"])
+                logger.info(f"Account '{account_name}' OK — {len(apps)} app(s): {apps}")
+            except KeyError as exc:
+                return False, f"Account '{account_name}' is missing required field: {exc}"
+            except Exception as e:
+                return False, f"Account '{account_name}' failed: {e}"
+        return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
-        apps = self._get_list_app(config)
-        return [ApplovinMaxUserLevelAdImpressionReport(config=config, list_app=apps)]
+        apps_by_account = self._discover_apps_by_account(config)
+        return [
+            ApplovinMaxUserLevelAdImpressionReport(
+                config=config,
+                accounts=config.get("accounts", []),
+                apps_by_account=apps_by_account,
+            )
+        ]

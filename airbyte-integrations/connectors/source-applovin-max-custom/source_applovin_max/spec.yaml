@@ -4,15 +4,30 @@ connectionSpecification:
   title: Applovin Max User-Level Spec
   type: object
   required:
-    - api_key
+    - accounts
     - start_date
   properties:
-    api_key:
-      title: API Key
-      description: Your AppLovin Report Key (Account > Keys)
+    accounts:
+      title: AppLovin Accounts
+      description: One entry per AppLovin account. Each account has its own Report Key (Account > Keys).
       order: 0
-      type: string
-      airbyte_secret: true
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+          - account_name
+          - api_key
+        properties:
+          account_name:
+            title: Account Name
+            description: Identifier stored in the account_name column (e.g. data@easygoing.vn)
+            type: string
+          api_key:
+            title: Report Key
+            description: This account's AppLovin Report Key (Account > Keys)
+            type: string
+            airbyte_secret: true
     start_date:
       title: Start Date
       description: Start date in YYYY-MM-DD format (must be within the last 45 days)
