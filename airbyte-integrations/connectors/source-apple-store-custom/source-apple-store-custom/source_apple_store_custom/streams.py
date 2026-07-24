@@ -251,9 +251,9 @@ class FinancialReportStream(BaseAppStoreStream):
         META_VENDOR_ID,
         _normalize("Start Date"),             # _Start_Date_
         _normalize("Vendor Identifier"),      # _Vendor_Identifier_
-        _normalize("Country of Sale"),        # _Country_of_Sale_
+        _normalize("Country Of Sale"),        # _Country_Of_Sale_
         _normalize("Product Type Identifier"),# _Product_Type_Identifier_
-        _normalize("Sale or Return"),         # _Sale_or_Return_
+        _normalize("Sales or Return"),         # _Sales_or_Return_
         _normalize("Promo Code"),             # _Promo_Code_
     ]
 
