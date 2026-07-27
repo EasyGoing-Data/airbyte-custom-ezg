@@ -16,6 +16,7 @@ from .client import AppStoreClient
 from .streams import (
     AppInstallationsStream,
     AppSessionsStream,
+    FinancialReportDetailStream,
     FinancialReportStream,
     SummarySalesStream,
 )
@@ -131,6 +132,7 @@ class SourceAppleAppStore(AbstractSource):
         return [
             SummarySalesStream(**kwargs),
             FinancialReportStream(**kwargs),
+            FinancialReportDetailStream(**kwargs),
             AppInstallationsStream(**kwargs),
             AppSessionsStream(**kwargs),
         ]

@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "description": "Transaction-level financial detail (FINANCE_DETAIL, regionCode=Z1). Bo sung Transaction Date / Settlement Date so voi financial_report. Ref: https://developer.apple.com/help/app-store-connect/reference/reporting/financial-report-fields",
+  "properties": {
+    "vendor_id":    { "type": ["null", "string"], "description": "Vendor ID from config (metadata)" },
+    "vendor_name":  { "type": ["null", "string"], "description": "Vendor name from config (metadata)" },
+    "report_month": { "type": ["null", "string"], "description": "Fiscal period requested, YYYY-MM (metadata, cursor)" },
+    "source_ref":   { "type": ["null", "string"], "description": "API query da goi, de truy vet (metadata)" },
+    "row_number":   { "type": ["null", "integer"], "description": "So thu tu dong trong file. BAT BUOC trong PK: FINANCE_DETAIL khong co Order ID nen 2 giao dich co the trung moi cot (playbook SS5)" },
+    "synced_at":    { "type": ["null", "string"], "format": "date-time", "description": "Timestamp when Airbyte synced this record (metadata)" },
+
+    "Start Date": { "type": ["null", "string"], "description": "Period start date theo Apple fiscal calendar (MM/DD/YYYY). O report nay nam o PREAMBLE cua file, khong phai cot data - parser gan vao tung dong. Giu nguyen ten de dong bo voi financial_report" },
+    "End Date":   { "type": ["null", "string"], "description": "Period end date theo Apple fiscal calendar (MM/DD/YYYY). Cung nam o preamble" },
+
+    "Transaction Date":        { "type": ["null", "string"], "description": "Ngay giao dich (MM/DD/YYYY) - ly do chinh dung report nay" },
+    "Settlement Date":         { "type": ["null", "string"], "description": "Ngay Apple ghi nhan thanh toan (MM/DD/YYYY)" },
+    "Apple Identifier":        { "type": ["null", "string"], "description": "Apple ID cua SAN PHAM IAP, KHONG phai app_id. Map app qua prefix cua SKU o tang dbt" },
+    "SKU":                     { "type": ["null", "string"], "description": "SKU cua app hoac Product ID cua IAP" },
+    "Title":                   { "type": ["null", "string"], "description": "Ten app hoac ten IAP" },
+    "Developer Name":          { "type": ["null", "string"], "description": "Ten phap nhan. Rong trong data thuc te" },
+    "Product Type Identifier": { "type": ["null", "string"], "description": "Loai san pham (IA1, 1F, 3F, 7F...). Ref: https://developer.apple.com/help/app-store-connect/reference/reporting/product-type-identifiers" },
+    "Country of Sale":         { "type": ["null", "string"], "description": "Ma ISO 2 ky tu cua App Store noi phat sinh. LUU Y chu 'of' thuong - khac 'Country Of Sale' cua financial_report" },
+    "Quantity":                { "type": ["null", "string"], "description": "So don vi. Am neu la return" },
+    "Partner Share":           { "type": ["null", "string"], "description": "Proceeds tren moi don vi sau thue va hoa hong Apple" },
+    "Extended Partner Share":  { "type": ["null", "string"], "description": "Quantity x Partner Share = tong proceeds thuc nhan" },
+    "Partner Share Currency":  { "type": ["null", "string"], "description": "Ma tien te ISO 3 ky tu cua proceeds" },
+    "Customer Price":          { "type": ["null", "string"], "description": "Gia khach tra moi don vi, gom thue. 3 chu so thap phan" },
+    "Customer Currency":       { "type": ["null", "string"], "description": "Ma tien te ISO 3 ky tu khach thanh toan" },
+    "Sale or Return":          { "type": ["null", "string"], "description": "S = Sale, R = Return. LUU Y so IT - financial_report la 'Sales or Return'" },
+    "Promo Code":              { "type": ["null", "string"], "description": "Ma khuyen mai neu co" },
+    "Order Type":              { "type": ["null", "string"], "description": "Vd FL cho don tu Family Sharing / Pre-order" },
+    "Region":                  { "type": ["null", "string"], "description": "Vung/bang chi tiet. Rong trong data mau" }
+  }
+}

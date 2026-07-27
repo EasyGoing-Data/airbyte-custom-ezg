@@ -25,6 +25,7 @@ import pytz
 from airbyte_cdk.sources.streams import IncrementalMixin, Stream
 
 from .client import AppStoreClient
+from .finance_detail_parser import parse_finance_detail
 
 logger = logging.getLogger("airbyte")
 
@@ -42,6 +43,9 @@ def _normalize(col: str) -> str:
 META_VENDOR_ID   = _normalize("vendor_id")    # _vendor_id_
 META_VENDOR_NAME = _normalize("vendor_name")  # _vendor_name_
 META_SYNCED_AT   = _normalize("synced_at")    # _synced_at_
+META_ROW_NUMBER   = _normalize("row_number")     # _row_number_
+META_REPORT_MONTH = _normalize("report_month")   # _report_month_
+META_SOURCE_REF   = _normalize("source_ref")     # _source_ref_
 
 
 # ─── Base Stream ──────────────────────────────────────────────────────────────
@@ -471,3 +475,76 @@ class AppSessionsStream(BaseAnalyticsStream):
         _normalize("territory"),        # _territory_
         _normalize("platform_version"), # _platform_version_
     ]
+
+
+# ─── Financial Report Detail Stream ───────────────────────────────────────────
+
+class FinancialReportDetailStream(FinancialReportStream):
+    """
+    Monthly transaction-level financial detail.
+    Source: GET /v1/financeReports  (reportType=FINANCE_DETAIL, regionCode=Z1)
+    Cursor: report_month (YYYY-MM fiscal)
+    Frequency: Monthly (Apple fiscal calendar)
+
+    Ke thua FinancialReportStream de dung lai _month_range() / _update_state() /
+    get_updated_state(). Chi override name, cursor, PK va read_records.
+
+    Khac financial_report (FINANCIAL/ZZ):
+      - Co Transaction Date + Settlement Date o muc tung giao dich
+      - File co preamble 3 dong -> parse bang parse_finance_detail(), KHONG
+        dung parse_gzip_tsv() (se tra ve 2 dong rac, xem finance_detail_parser)
+      - Start Date / End Date nam o preamble -> gan vao moi dong, giu nguyen ten
+      - Ten cot khac: "Sale or Return" (so it), "Country of Sale" (chu 'of' thuong)
+
+    Ref: https://developer.apple.com/help/app-store-connect/reference/reporting/financial-report-fields
+    """
+
+    name         = "financial_report_detail"
+    cursor_field = META_REPORT_MONTH          # _report_month_ — luon co, khong phu thuoc preamble
+    primary_key  = [
+        META_VENDOR_ID,       # _vendor_id_
+        META_REPORT_MONTH,    # _report_month_
+        META_ROW_NUMBER,      # _row_number_ — BAT BUOC (§5): report nay khong co Order ID,
+                              # 2 giao dich cung ngay/SKU/nuoc co the trung MOI cot
+    ]
+
+    def read_records(
+        self,
+        stream_slice: Mapping[str, Any],
+        **kwargs,
+    ) -> Iterable[Mapping[str, Any]]:
+        vendor    = stream_slice["vendor"]
+        vendor_id = vendor["vendor_id"]
+        client    = self._client_for(vendor)
+
+        for year_month in self._month_range(vendor_id):
+            logger.info(f"[financial_report_detail] vendor={vendor_id} month={year_month}")
+
+            content = client.fetch_finance_detail_report(vendor_id, year_month)
+            if not content:
+                logger.debug(f"No finance detail for vendor={vendor_id} month={year_month}")
+                continue
+
+            preamble, _header, rows = parse_finance_detail(content)
+            logger.info(
+                f"[financial_report_detail] vendor={vendor_id} month={year_month}: "
+                f"{len(rows)} rows (period {preamble.get('Start Date')} → {preamble.get('End Date')})"
+            )
+
+            source_ref = (
+                f"financeReports?reportType=FINANCE_DETAIL&regionCode=Z1"
+                f"&reportDate={year_month}&vendorNumber={vendor_id}"
+            )
+
+            for row_number, raw in enumerate(rows, start=1):
+                record = self._inject_metadata(raw, vendor)
+                record[META_REPORT_MONTH] = year_month
+                record[META_ROW_NUMBER]   = row_number
+                record[META_SOURCE_REF]   = source_ref
+                # Start Date / End Date nam o preamble cua file, khong phai cot data.
+                # Giu nguyen ten goc de dong bo voi financial_report.
+                record[_normalize("Start Date")] = preamble.get("Start Date")
+                record[_normalize("End Date")]   = preamble.get("End Date")
+
+                self._update_state(vendor_id, year_month)
+                yield record

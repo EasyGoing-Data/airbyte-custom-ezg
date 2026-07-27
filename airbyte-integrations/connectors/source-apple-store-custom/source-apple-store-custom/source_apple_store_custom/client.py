@@ -282,6 +282,34 @@ class AppStoreClient:
         )
         return resp.content if resp.status_code == 200 else b""
 
+    def fetch_finance_detail_report(self, vendor_id: str, year_month: str) -> bytes:
+        """
+        Fetch monthly Financial Report DETAIL (gzip TSV) — transaction level.
+        year_month: YYYY-MM (Apple fiscal calendar)
+        Returns raw bytes; empty b"" if no data.
+
+        Khac fetch_finance_report():
+          - reportType = FINANCE_DETAIL (thay vi FINANCIAL)
+          - regionCode = Z1 BAT BUOC — dung ZZ se tra 404 gay hieu nham "khong co data"
+
+        ⚠️ File nay KHONG parse duoc bang parse_gzip_tsv(): no co preamble 3 dong
+        (Vendor Name / Start Date / End Date) truoc header that. Dung
+        finance_detail_parser.parse_finance_detail() thay the.
+
+        Ref: https://developer.apple.com/documentation/appstoreconnectapi/get-v1-financereports
+        """
+        resp = self._get(
+            f"{BASE_URL}/v1/financeReports",
+            params={
+                "filter[vendorNumber]": vendor_id,
+                "filter[reportType]":   "FINANCE_DETAIL",
+                "filter[regionCode]":   "Z1",
+                "filter[reportDate]":   year_month,
+            },
+            allow_404=True,
+        )
+        return resp.content if resp.status_code == 200 else b""
+
     # ─── Analytics API — 5-step flow ─────────────────────────────────────────
 
     def create_analytics_request(self, app_id: str, access_type: str) -> Optional[str]:
