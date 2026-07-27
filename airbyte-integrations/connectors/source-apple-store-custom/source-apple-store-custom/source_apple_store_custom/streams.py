@@ -501,11 +501,25 @@ class FinancialReportDetailStream(FinancialReportStream):
 
     name         = "financial_report_detail"
     cursor_field = META_REPORT_MONTH          # _report_month_ — luon co, khong phu thuoc preamble
+    # PK chi tiet: gom moi cot dimension dinh nghia 1 dong giao dich, CONG _row_number_.
+    # _row_number_ lam chot cuoi -> dam bao unique tuyet doi: 2 giao dich trung het moi cot
+    # trong cung 1 file van khong bi gop (khong undercount). Da verify unique 37/37 va 38/38 (§5).
     primary_key  = [
-        META_VENDOR_ID,       # _vendor_id_
-        META_REPORT_MONTH,    # _report_month_
-        META_ROW_NUMBER,      # _row_number_ — BAT BUOC (§5): report nay khong co Order ID,
-                              # 2 giao dich cung ngay/SKU/nuoc co the trung MOI cot
+        META_VENDOR_ID,                            # _vendor_id_
+        META_REPORT_MONTH,                         # _report_month_
+        _normalize("Transaction Date"),            # _Transaction_Date_
+        _normalize("Settlement Date"),             # _Settlement_Date_
+        _normalize("Apple Identifier"),            # _Apple_Identifier_  (id san pham IAP)
+        _normalize("SKU"),                         # _SKU_
+        _normalize("Product Type Identifier"),     # _Product_Type_Identifier_
+        _normalize("Country of Sale"),             # _Country_of_Sale_
+        _normalize("Quantity"),                    # _Quantity_
+        _normalize("Extended Partner Share"),      # _Extended_Partner_Share_
+        _normalize("Sale or Return"),              # _Sale_or_Return_
+        _normalize("Order Type"),                  # _Order_Type_
+        _normalize("Region"),                      # _Region_
+        _normalize("Promo Code"),                  # _Promo_Code_
+        META_ROW_NUMBER,                           # _row_number_ — chot cuoi chong undercount
     ]
 
     def read_records(
