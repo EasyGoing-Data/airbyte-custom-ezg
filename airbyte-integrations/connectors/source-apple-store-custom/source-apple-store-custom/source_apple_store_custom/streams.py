@@ -261,14 +261,27 @@ class FinancialReportStream(BaseAppStoreStream):
         _normalize("Promo Code"),             # _Promo_Code_
     ]
 
+    # Apple financeReports reportDate la FISCAL month, di TRUOC ky giao dich ~3 thang.
+    # Neu chan tran theo thang calendar thi kho luon tre ~3 thang du Apple da publish.
+    # Noi tran them fiscal_lead_months; ky nao Apple chua co tra 404 -> skip an toan
+    # (fetch_finance*_report dung allow_404=True).
+    FISCAL_LEAD_MONTHS = 3
+
+    @staticmethod
+    def _add_months(d, n: int):
+        """Cong n thang vao dau thang cua d (khong dung dateutil)."""
+        y, m = d.year, d.month - 1 + n
+        return d.replace(year=y + m // 12, month=m % 12 + 1, day=1)
+
     def _month_range(self, vendor_id: str) -> Iterable[str]:
-        """Yield YYYY-MM strings from start_date to last complete month."""
-        today      = self._today()
-        last_month = (today.replace(day=1) - timedelta(days=1))  # last day of prev month
+        """Yield YYYY-MM reportDate strings tu start_date (hoac cursor) den thang calendar
+        gan nhat + FISCAL_LEAD_MONTHS (de bat kip fiscal reportDate di truoc lich duong)."""
+        today       = self._today()
+        last_month  = self._add_months(today.replace(day=1), -1)     # dau thang calendar truoc
+        end_month   = self._add_months(last_month, self.FISCAL_LEAD_MONTHS)
 
         if self._get_last_x_days:
-            # For monthly: interpret lookback_days as months for simplicity
-            start_month = last_month.replace(day=1)
+            start_month = last_month
         else:
             saved = self._state.get(vendor_id, {}).get(self.cursor_field)
             if saved:
@@ -279,13 +292,9 @@ class FinancialReportStream(BaseAppStoreStream):
                 start_month = datetime.strptime(self._start_date, "%Y-%m-%d").date().replace(day=1)
 
         current = start_month
-        while current <= last_month:
+        while current <= end_month:
             yield current.strftime("%Y-%m")
-            # Advance to next month
-            if current.month == 12:
-                current = current.replace(year=current.year + 1, month=1)
-            else:
-                current = current.replace(month=current.month + 1)
+            current = self._add_months(current, 1)
 
     def stream_slices(self, **kwargs) -> Iterable[Mapping[str, Any]]:
         for vendor in self._vendors:
