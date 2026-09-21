@@ -1,0 +1,89 @@
+documentationUrl: https://pubscale.gitbook.io/immersive-ads-sdk/reporting-api/api-key-documentation
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Pubscale (GreedyGame) Reporting Spec
+  type: object
+  required:
+    - accounts
+    - start_date
+  properties:
+    accounts:
+      title: Pubscale Accounts
+      description: One entry per GreedyGame/Pubscale publisher account. API key needs scope ia-reporting.READ (Publisher dashboard > API Keys).
+      order: 0
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+          - account_name
+          - api_key
+        properties:
+          account_name:
+            title: Account Name
+            description: Identifier stored in the account_name column (e.g. data@easygoing.vn)
+            type: string
+          api_key:
+            title: API Key
+            description: This account's Pubscale reporting API key (X-Api-Key)
+            type: string
+            airbyte_secret: true
+    start_date:
+      title: Start Date
+      description: Start date in YYYY-MM-DD format for the first sync / backfill.
+      order: 1
+      type: string
+      format: date
+    number_days_backward:
+      title: Number of days backward (lookback)
+      description: Each run goes back this many days from the last cursor to refresh recently-updated data. Default 7.
+      order: 2
+      type: integer
+      default: 7
+      minimum: 1
+      maximum: 90
+    get_last_X_days:
+      title: Get last X days only
+      description: If true, ignore Start Date and always fetch only the last X days (X = number of days backward).
+      order: 3
+      type: boolean
+      default: false
+    window_days:
+      title: Days per request
+      description: Date-range width of each API request. API maximum is 90. Default 30.
+      order: 4
+      type: integer
+      default: 30
+      minimum: 1
+      maximum: 90
+    page_size:
+      title: Page size
+      description: Rows per page (pagination.count). Default 1000.
+      order: 5
+      type: integer
+      default: 1000
+      minimum: 1
+    dimensions:
+      title: Dimensions
+      description: "Report grain. Allowed: date, app, country, placement_id, ad_tag, demand_source, sdk_v. 'date' is always included. Note: ad_tag cannot be combined with ad_requests/ad_responses/fill_rate/show_rate (those metrics are dropped automatically)."
+      order: 6
+      type: array
+      items:
+        type: string
+        enum: [date, app, country, placement_id, ad_tag, demand_source, sdk_v]
+      default: [date, app, country, placement_id, demand_source]
+    metrics:
+      title: Metrics
+      description: "Allowed: ad_requests, ad_responses, impressions, clicks, revenue, ecpm, fill_rate, show_rate, click_rate. Zero values omitted by the API are filled with 0."
+      order: 7
+      type: array
+      items:
+        type: string
+        enum: [ad_requests, ad_responses, impressions, clicks, revenue, ecpm, fill_rate, show_rate, click_rate]
+      default: [ad_requests, ad_responses, impressions, clicks, revenue, ecpm, fill_rate, show_rate, click_rate]
+    timezone:
+      title: Timezone
+      description: Default UTC. Use a tz name like Asia/Ho_Chi_Minh. Used to compute "today" for slicing.
+      order: 8
+      type: string
+      default: UTC

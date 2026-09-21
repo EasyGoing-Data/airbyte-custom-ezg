@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+build/
+*.egg-info/
+secrets/config.json
+secrets/catalog.json
+secrets/state.json
+secrets/read_output.jsonl
+secrets/tmp*.json
+sa*.json
+service_account*.json
+*-credentials.json
+
+.venv*/
