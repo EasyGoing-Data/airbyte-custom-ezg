@@ -19,7 +19,8 @@ Docs API: https://pubscale.gitbook.io/immersive-ads-sdk/reporting-api/api-key-do
 - Grain mac dinh: `date, app, country, placement_id, demand_source` x 9 metrics (co the doi trong spec).
 - PK: `account_name + dimensions` (`app` -> `app_id`); them cot `app_name`, `account_name`.
 - Slice = account x cua so `window_days` ngay (mac dinh 30, max 90); moi slice phan trang `page_size` (mac dinh 1000) theo `has_next` API tra ve (fallback: doc tiep khi trang day).
-- Flatten: `app{}` -> `app_id` + `app_name`; `plcmnt{}` -> `placement_name` + `ad_unit_id` (vi `placement_id` chi la so).
+- Flatten: `app{}` -> `app_id`, `app_name`, `package_name`, `platform` (tu `app.platforms[0]`, fallback `app.engine`); `plcmnt{}` -> `placement_name` + `ad_unit_id` (vi `placement_id` chi la so).
+- Metric float round 6 so le (BigQuery NUMERIC scale 9; API tra toi 16 so le -> Airbyte bao TRUNCATED).
 - `order_by` = date + toan bo dimensions -> sort xac dinh, phan trang on dinh.
 - Cursor theo TUNG account; state emit = MIN(max_date cac account). Slice doc xong (ke ca 204) -> account do phu den end_date. Ly do: slice la cua so 30 ngay, neu acc1 xong ma acc2 fail thi state max toan cuc se lam acc2 mat ca cua so (> lookback).
 - Rate limit: `_send` cho >= 2.1s giua 2 request cung key; 429 -> retry theo `Retry-After` (mac dinh 5s).
@@ -34,14 +35,18 @@ python main.py check    --config secrets/config.json                 # key that 
 python main.py read     --config secrets/config.json --catalog secrets/test_catalog.json
 ```
 
-## Build (tren VM)
+## Build (tren VM: /home/data/airbyte-custom-ezg)
 ```bash
-docker build -t dataezg/source-pubscale-custom:v1.0.0 .
-docker run --rm dataezg/source-pubscale-custom:v1.0.0 spec | head -5
-docker run --rm -v $(pwd)/secrets:/secrets dataezg/source-pubscale-custom:v1.0.0 check --config /secrets/config.json
-docker push dataezg/source-pubscale-custom:v1.0.0
+docker build -t dataezg/source-pubscale-custom:v1.0.1 .
+docker run --rm dataezg/source-pubscale-custom:v1.0.1 spec | head -c 300
+docker push dataezg/source-pubscale-custom:v1.0.1
 ```
-Airbyte: Settings -> Sources -> + New connector -> `dataezg/source-pubscale-custom`, tag `v1.0.0`.
+Airbyte: Settings -> Sources -> Pubscale -> doi tag -> `v1.0.1`. Connection: Airbyte `airbyte_data_export.pubscale_report`, cron `0 30 23 * * ?` (06:30 VN).
+
+## v1.0.1 — Changelog
+- + `package_name`, `platform` lay tu `app.platforms[0]` (fallback `app.engine`); warning neu app co >1 platform.
+- Round metric float 6 so le -> het warning `TRUNCATED ecpm/fill_rate/show_rate` (DESTINATION_FIELD_SIZE_LIMITATION).
+- Can full refresh (hoac reset stream) sau khi doi tag de backfill 2 cot moi cho data cu.
 
 ## v1.0.0 — Changelog
 - Khoi tao. Da test voi mock server: spec/discover/check (401 bao ro account), read (phan trang, 204, zero-fill, state), incremental lookback, clamp cursor tuong lai, rate limit.

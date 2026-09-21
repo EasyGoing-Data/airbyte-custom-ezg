@@ -1,7 +1,8 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
-# source-pubscale-custom v1.0.0
+# source-pubscale-custom v1.0.1
+#   v1.0.1: + package_name, platform (tu app.platforms[0]); round metric 6 so le (het warning TRUNCATED)
 # Pubscale (GreedyGame) Immersive Ads Reporting API -> BigQuery.
 # Khung theo source-applovin-max-custom v1.8.0 (multi-account, incremental + lookback,
 # cursor khong +1, clamp <= today, guard slice None).
@@ -334,9 +335,20 @@ class PubscaleReport(PubscaleStream, IncrementalMixin):
                     if isinstance(app, dict):
                         rec["app_name"] = app.get("name")
                         rec["app_id"] = row.get("app_id") or app.get("id") or app.get("app_id")
+                        # v1.0.1: package_name + platform tu app.platforms[0] (fallback app.engine)
+                        platforms = app.get("platforms") or []
+                        first = platforms[0] if platforms and isinstance(platforms[0], dict) else {}
+                        rec["package_name"] = first.get("package")
+                        rec["platform"] = first.get("platform") or app.get("engine")
+                        if len(platforms) > 1:
+                            self.logger.warning(
+                                f"App {rec['app_id']} co {len(platforms)} platforms {platforms} — chi lay phan tu dau."
+                            )
                     else:
                         rec["app_name"] = app if app is not None else None
                         rec["app_id"] = row.get("app_id")
+                        rec["package_name"] = None
+                        rec["platform"] = None
                     if rec.get("app_id") is not None:
                         rec["app_id"] = str(rec["app_id"])
                 else:
@@ -348,10 +360,16 @@ class PubscaleReport(PubscaleStream, IncrementalMixin):
                 if isinstance(plcmnt, dict):
                     rec["placement_name"] = plcmnt.get("name")
                     rec["ad_unit_id"] = plcmnt.get("unit_id")
-            # metrics — API luoc bo gia tri 0 -> fill 0
+            # metrics — API luoc bo gia tri 0 -> fill 0; round 6 so le (BigQuery NUMERIC scale 9,
+            # API tra toi 16 so le -> Airbyte bao TRUNCATED; 6 la du cho revenue USD / ecpm / rate %)
             for m in self.metrics:
                 v = row.get(m)
-                rec[m] = 0 if v is None else v
+                if v is None:
+                    rec[m] = 0
+                elif isinstance(v, float):
+                    rec[m] = round(v, 6)
+                else:
+                    rec[m] = v
             # passthrough cac cot la (ngoai app object)
             for k, v in row.items():
                 if k not in rec and k != "app" and not isinstance(v, (dict, list)):
@@ -365,6 +383,8 @@ class PubscaleReport(PubscaleStream, IncrementalMixin):
             if d == "app":
                 props["app_id"] = {"type": ["null", "string"]}
                 props["app_name"] = {"type": ["null", "string"]}
+                props["package_name"] = {"type": ["null", "string"]}
+                props["platform"] = {"type": ["null", "string"]}
             elif d == "date":
                 props["date"] = {"type": ["null", "string"], "format": "date"}
             elif d == "placement_id":
