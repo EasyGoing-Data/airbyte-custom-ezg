@@ -573,7 +573,7 @@ jobs:
           steps.check-release-block.outputs.blocked != 'true' &&
           needs.publish_options.outputs.dry-run != 'true' &&
           steps.success-context.outcome == 'success'
-        uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           payload: |
             {
@@ -673,7 +673,7 @@ jobs:
           echo "connector-text=$CONNECTOR_TEXT" >> $GITHUB_OUTPUT
       - name: Send publish failures to connector-publish-failures channel
         id: slack
-        uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           # This data can be any valid JSON from a previous step in the GitHub Action
           payload: |
