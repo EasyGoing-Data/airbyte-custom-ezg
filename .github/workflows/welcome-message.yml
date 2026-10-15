@@ -32,7 +32,7 @@ jobs:
 
       - name: Render template
         id: template
-        uses: chuhlomin/render-template@f828bb5c72a3e3af89cb79808cea490166c6f1ce # v1.4
+        uses: chuhlomin/render-template@a7c644e341797d050d1cb24332d83791b9a46dae # v1.12
         with:
           # Use a different template for internal vs forks (community)
           template: ${{ github.event.pull_request.head.repo.fork == true && '.github/pr-welcome-community.md' || '.github/pr-welcome-internal.md' }}
