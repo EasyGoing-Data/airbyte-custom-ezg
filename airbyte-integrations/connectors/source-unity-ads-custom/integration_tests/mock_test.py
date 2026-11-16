@@ -62,7 +62,7 @@ class Handler(BaseHTTPRequestHandler):
         # org 2: cua so dau tien (bat dau dung START) rong -> test slice rong van tien cursor
         if org == "2222222222222" and start == START:
             return self._reply(200, "")
-        lines = [HEADER]
+        lines = [HEADER.replace("source_game_id", "sgid") if state.get("alt_header") else HEADER]
         d = start
         while d <= end and d <= TODAY:
             ts = f"{d.isoformat()}T00:00:00.000Z"
@@ -195,6 +195,15 @@ def main():
     proc, msgs = run(["read", "--config", cfg, "--catalog", catalog, "--state", write("future.json", st)], env)
     check("cursor tuong lai: khong crash, state = hom nay", proc.returncode == 0 and last_state(msgs) == TODAY.isoformat(),
           f"rc={proc.returncode} state={last_state(msgs)}")
+
+    # response thieu cot khoa (ten cot khac gia dinh) -> dung han, khong nap record nao
+    state["alt_header"] = True
+    proc, msgs = run(["read", "--config", cfg, "--catalog", catalog], env)
+    failed = proc.returncode != 0 or any(m.get("type") == "TRACE" and m["trace"].get("type") == "ERROR" for m in msgs)
+    check("thieu cot khoa: sync bao loi, neu ten cot, 0 record",
+          failed and "thieu cot khoa" in (proc.stdout + proc.stderr) and "sgid" in (proc.stdout + proc.stderr) and not records(msgs),
+          f"rc={proc.returncode} recs={len(records(msgs))}")
+    state["alt_header"] = False
 
     # parser JSON
     sys.path.insert(0, ROOT)

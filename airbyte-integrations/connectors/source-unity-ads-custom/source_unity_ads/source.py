@@ -353,7 +353,16 @@ class UnityAdsMonetization(UnityAdsStream, IncrementalMixin):
         end_raw = self._current_slice.get("end_date")
         today = pendulum.today(REPORT_TIMEZONE).date()
         dim_columns = [c for g in self.group_by for c in GROUP_BY_COLUMNS[g]]
-        for row in _parse_body(response):
+        rows = _parse_body(response)
+        if rows:
+            # Thieu cot khoa -> PK = null -> Airbyte dedup gop nham row. Dung han thay vi nap du lieu sai.
+            missing = [GROUP_BY_PK[g] for g in self.group_by if GROUP_BY_PK[g] not in rows[0]]
+            if missing:
+                raise ValueError(
+                    f"Response thieu cot khoa {missing}; cot nhan duoc: {sorted(rows[0].keys())}. "
+                    f"Bo sung COLUMN_ALIASES trong source.py roi sync lai."
+                )
+        for row in rows:
             raw_ts = row.get("timestamp")
             if not raw_ts:
                 self.logger.warning(f"Row khong co timestamp, bo qua. Cot nhan duoc: {sorted(row.keys())}")

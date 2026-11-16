@@ -28,6 +28,7 @@ Docs API: https://docs.unity.com/en-us/monetization/performance-and-analytics/ap
 - Cursor theo TUNG account; state emit = MIN(max_date cac account). Slice doc xong (ke ca rong) -> account do phu den end_date.
 - Rate limit: >= 1.1 giay giua 2 request cung key; 429 -> retry theo `Retry-After` (mac dinh 10s); 408 -> retry.
 - Parser: doc CSV hoac JSON; ten cot chuan hoa (chu thuong, `_`) + alias (`game id` -> `source_game_id`, ...); cot la passthrough.
+- Response thieu cot khoa (ten cot khac gia dinh) -> sync DUNG va bao ten cot nhan duoc, khong nap record nao (tranh PK null lam dedup gop nham dong).
 - Row co ngay ngoai cua so da xin bi loc bo (tai lieu khong ghi `end` co bao gom hay khong).
 - Metric rong -> 0; `*_count` -> so nguyen, `*_sum` -> round 6 so le (BigQuery NUMERIC scale 9).
 - Key khong nam trong stream_slice, khong nam trong URL, khong in ra log / thong bao loi.
@@ -52,5 +53,5 @@ Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-unity-a
 Connection: stream `unity_ads_monetization`, Incremental | Append + Deduped -> `airbyte_data_export.unity_ads_monetization`.
 
 ## v1.0.0 — Changelog
-- Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover / check (key sai bao ro account, khong lo key) / read full / incremental lookback 14 / clamp cursor tuong lai / retry 429 / slice rong / loc row ngoai cua so — 24/24 dat.
+- Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover / check (key sai bao ro account, khong lo key) / read full / incremental lookback 14 / clamp cursor tuong lai / retry 429 / slice rong / loc row ngoai cua so / thieu cot khoa thi dung — 25/25 dat.
 - CHUA xac nhan voi key that. Can kiem khi co key: (1) ten cot that cua response (tai lieu khong co mau; hien gia dinh `timestamp, country, placement, platform, source_game_id, source_name`), (2) `end` bao gom hay khong, (3) don vi tien cua `revenue_sum`, (4) nguong 429 thuc te, (5) PK unique tren du lieu that.
