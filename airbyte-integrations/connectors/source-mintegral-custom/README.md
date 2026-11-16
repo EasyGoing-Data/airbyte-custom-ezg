@@ -22,7 +22,7 @@ Docs API: https://cdn-adn-https.rayjump.com/cdn-adn/reporting_api/MintegralRA.ht
 - Mui gio: luon gui `timezone=0` (UTC), khong co tuy chon — khop voi bao cao MAX.
 - Grain mac dinh: `date, app_id, placement_id, unit_id, country, platform` (doi duoc qua `group_by`; them duoc `bidding_type`).
 - Cot dimension kem theo: `app_name, app_package, placement_name, unit_name, ad_format`.
-- Metric: `filled, request, impression, click, est_revenue, ecpm, fill_rate, ctr` (+ `hb_load, hb_load_filled` khi co `bidding_type`).
+- Metric: `filled, request, impression, click, est_revenue, ecpm, fill_rate, ctr` (+ `hb_load, hb_load_filled` chi khai trong schema khi `group_by` co `bidding_type`).
 - PK: `account_name` + `group_by`.
 - `date` API tra dang so `20190506` -> doi thanh `2019-05-06`. Cac id -> chuoi. Metric float round 6 so le.
 - Slice = account x cua so `window_days` ngay (mac dinh 7 = toi da cua API); moi slice phan trang theo `total_page`.
@@ -47,13 +47,18 @@ python main.py read     --config secrets/config.json --catalog integration_tests
 
 ## Build (tren VM: /home/data/airbyte-custom-ezg, nhanh `agent/source-mintegral-custom`)
 ```bash
-docker build -t dataezg/source-mintegral-custom:v1.0.0 .
-docker run --rm dataezg/source-mintegral-custom:v1.0.0 spec | head -c 300
-docker push dataezg/source-mintegral-custom:v1.0.0
+docker build -t dataezg/source-mintegral-custom:v1.0.1 .
+docker run --rm dataezg/source-mintegral-custom:v1.0.1 spec | head -c 300
+docker push dataezg/source-mintegral-custom:v1.0.1
 ```
-Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-mintegral-custom`, tag `v1.0.0`.
+Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-mintegral-custom`, tag `v1.0.1`.
 Connection: stream `mintegral_report`, Incremental | Append + Deduped -> `airbyte_data_export.mintegral_report`.
 Luu y: API chi giu 60 ngay -> bat connection cang som cang giu duoc nhieu lich su; neu connection dung qua 46 ngay thi mat du lieu (lookback 14).
+
+## v1.0.1 — Changelog
+- Schema khop du lieu that: `hb_load`, `hb_load_filled` chi khai khi `group_by` co `bidding_type` (grain mac dinh API khong tra 2 cot nay -> v1.0.0 tao 2 cot toan null). Khong doi PK. Test voi server gia: 33/33 dat.
+- DA xac nhan voi key that (16/11/2026, read 09/11 -> 16/11, 1 account): `check` dat voi `skey` + `secret`; 4.215 dong; PK khong trung; 8 dong `country` rong (doanh thu 0).
+- Doi soat voi AppLovin MAX (ad network `MINTEGRAL_BIDDING`) 09/11 -> 15/11: MAX 471,76 USD, Mintegral 470,75 USD (lech -0,2%) -> `est_revenue` la USD, ngay UTC.
 
 ## v1.0.0 — Changelog
 - Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover / check (secret sai bao ro account) / chu ky md5 khop vi du tai lieu / read full co phan trang / clamp 60 ngay / incremental lookback 14 / clamp cursor tuong lai / retry HTTP 500 / account loi giua chung -> state khong vuot / phan trang lech total thi doc lai roi dung / thieu cot khoa thi dung / khong lo skey, secret, sign — 32/32 dat.

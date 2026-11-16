@@ -188,6 +188,8 @@ def main():
     streams = next((m["catalog"]["streams"] for m in msgs if m.get("type") == "CATALOG"), [])
     check("discover 1 stream dung ten", [s["name"] for s in streams] == [STREAM], proc.stderr[-300:])
     if streams:
+        check("discover schema: khong khai hb_load khi group_by khong co bidding_type",
+              not any(c in streams[0]["json_schema"]["properties"] for c in ("hb_load", "hb_load_filled")))
         check("discover PK", [p[0] for p in streams[0].get("source_defined_primary_key", [])] == pk,
               str(streams[0].get("source_defined_primary_key")))
         check("discover cursor date + incremental", streams[0].get("default_cursor_field") == ["date"]

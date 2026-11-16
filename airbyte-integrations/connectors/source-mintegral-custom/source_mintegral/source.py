@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
-# source-mintegral-custom v1.0.0
+# source-mintegral-custom v1.0.1
 # Mintegral Reporting API (publisher) -> BigQuery (doanh thu quang cao lay truc tiep tu Mintegral).
 # Khung theo source-pubscale-custom v1.0.1 / source-applovin-max-custom v1.8.0
 # (multi-account, incremental + lookback, cursor theo tung account, khong +1, clamp <= today, guard slice None).
@@ -64,6 +64,9 @@ GROUP_BY_COLUMNS = {
 }
 INT_METRICS = ["filled", "request", "impression", "click", "hb_load", "hb_load_filled"]
 FLOAT_METRICS = ["est_revenue", "ecpm", "fill_rate", "ctr"]
+# API chi tra 2 metric nay khi group_by co `bidding_type` -> chi khai trong schema khi do
+# (16/11/2026: grain mac dinh khong co, khai san thi bang dich co 2 cot toan null).
+BIDDING_ONLY_METRICS = {"hb_load", "hb_load_filled"}
 
 
 class MintegralApiError(Exception):
@@ -402,6 +405,8 @@ class MintegralReport(Stream, IncrementalMixin):
                 if c != "date":
                     props[c] = {"type": ["null", "string"]}
         for m in INT_METRICS + FLOAT_METRICS:
+            if m in BIDDING_ONLY_METRICS and "bidding_type" not in self.group_by:
+                continue
             props[m] = {"type": ["null", "number"]}
         return {
             "$schema": "http://json-schema.org/draft-07/schema#",
