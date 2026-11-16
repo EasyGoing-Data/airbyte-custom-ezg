@@ -1,0 +1,75 @@
+documentationUrl: https://www.pangleglobal.com/integration/reporting-api-v2
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Pangle Reporting Spec
+  type: object
+  required:
+    - accounts
+    - start_date
+  properties:
+    accounts:
+      title: Pangle Accounts
+      description: One entry per Pangle account. Security key and Role ID are on the Pangle platform > SDK Integration > Data API. The role must have access to all apps, otherwise the API returns partial data.
+      order: 0
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+          - account_name
+          - user_id
+          - role_id
+          - security_key
+        properties:
+          account_name:
+            title: Account Name
+            description: Identifier stored in the account_name column (e.g. data@easygoing.vn)
+            type: string
+          user_id:
+            title: User ID
+            description: Pangle account id (digits).
+            type: string
+          role_id:
+            title: Role ID
+            description: Role ID shown next to the security key (digits).
+            type: string
+          security_key:
+            title: Security Key
+            description: Security key of this account (used to sign requests, never sent).
+            type: string
+            airbyte_secret: true
+    start_date:
+      title: Start Date
+      description: Start date (UTC) in YYYY-MM-DD format for the first sync / backfill. One API request per day per account.
+      order: 1
+      type: string
+      format: date
+    number_days_backward:
+      title: Number of days backward (lookback)
+      description: Each run goes back this many days from the last cursor to refresh recently-updated data. Default 14.
+      order: 2
+      type: integer
+      default: 14
+      minimum: 1
+      maximum: 90
+    get_last_X_days:
+      title: Get last X days only
+      description: If true, ignore Start Date and always fetch only the last X days (X = number of days backward).
+      order: 3
+      type: boolean
+      default: false
+    window_days:
+      title: Days per slice
+      description: Number of days grouped in one slice (state is saved after each slice). Default 7, maximum 31.
+      order: 4
+      type: integer
+      default: 7
+      minimum: 1
+      maximum: 31
+    currency:
+      title: Currency
+      description: Currency of the revenue columns. Default usd.
+      order: 5
+      type: string
+      enum: [usd, cny]
+      default: usd
