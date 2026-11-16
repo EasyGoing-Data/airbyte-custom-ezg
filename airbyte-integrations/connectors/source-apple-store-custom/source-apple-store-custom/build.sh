@@ -15,7 +15,7 @@ set -euo pipefail
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 IMAGE_NAME="dataezg/source-apple-store-custom"
-IMAGE_TAG="0.9.3"
+IMAGE_TAG="0.9.4"
 IMAGE_FULL="${IMAGE_NAME}:${IMAGE_TAG}"
 PYTHON="python3"
 

@@ -56,3 +56,23 @@ docker run --rm -v $(pwd)/secrets:/secrets dataezg/source-apple-store-custom:0.1
 - `app_installations` and `app_sessions` data only includes opted-in users.
   Rows with < 5 users are omitted by Apple (not a connector error).
 - Financial reports follow Apple's fiscal calendar, not calendar months.
+
+## Nhiều vendor: 1 tài khoản bị Apple từ chối (từ 0.9.4)
+
+Áp dụng cho `summary_sales`, `financial_report`, `financial_report_detail` khi Apple trả
+**401 / 403** cho một vendor (khoá bị thu hồi, thiếu quyền, thoả thuận chưa chấp nhận...):
+
+- Không retry 401 / 403. Log ghi mã lỗi của Apple, ví dụ
+  `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`.
+- `check`: thử mọi vendor. Còn ít nhất 1 vendor gọi được thì PASS (log cảnh báo vendor lỗi);
+  mọi vendor đều bị từ chối thì FAIL. Lỗi khác (thiếu trường, lỗi mạng) vẫn FAIL ngay.
+- `read`: bỏ qua vendor bị từ chối, các vendor còn lại vẫn đọc và lưu cursor. Hết stream thì
+  báo lỗi nêu tên vendor, nên **job vẫn kết thúc `failed`** (không im lặng thiếu dữ liệu).
+- Cursor lưu theo từng vendor, nên khi Apple thông lại, lần sync sau tự đọc bù từ
+  `cursor - lookback_days` của vendor đó.
+
+## Test
+
+```bash
+python -m pytest unit_tests -q
+```

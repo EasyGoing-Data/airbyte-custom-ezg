@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 
-from .client import AppStoreClient
+from .client import AppStoreAuthError, AppStoreClient
 from .streams import (
     AppInstallationsStream,
     AppSessionsStream,
@@ -92,10 +92,22 @@ class SourceAppleAppStore(AbstractSource):
         """
         Validate credentials for every vendor by listing its apps.
         Each vendor uses its own key_id / issuer_id / private_key.
+
+        Moi vendor deu duoc thu (khong dung o vendor dau tien loi).
+        - Vendor bi Apple tu choi (401 / 403, AppStoreAuthError): ghi log, thu tiep
+          vendor sau. Neu con it nhat 1 vendor goi duoc thi check PASS, de sync
+          van chay cho cac tai khoan lanh; sync se bo qua vendor loi roi ket thuc
+          o trang thai failed va neu ten vendor do (xem streams.py).
+        - Moi vendor deu bi tu choi: check FAIL, liet ke tung vendor.
+        - Loi khac (thieu truong cau hinh, khoa sai dinh dang, loi mang...): check
+          FAIL ngay nhu truoc.
         """
         vendors = config.get("vendors", [])
         if not vendors:
             return False, "No vendors configured. Add at least one vendor."
+
+        ok_count = 0
+        rejected: List[str] = []
 
         for vendor in vendors:
             vid   = vendor.get("vendor_id", "?")
@@ -108,10 +120,25 @@ class SourceAppleAppStore(AbstractSource):
                 )
                 apps = client.list_apps()
                 logger.info(f"Vendor '{vname}' ({vid}) OK — found {len(apps)} app(s).")
+                ok_count += 1
             except KeyError as exc:
                 return False, f"Vendor '{vname}' is missing required field: {exc}"
+            except AppStoreAuthError as exc:
+                message = f"Vendor '{vname}' ({vid}) failed: {exc}"
+                logger.error(message)
+                rejected.append(message)
             except Exception as exc:
                 return False, f"Vendor '{vname}' ({vid}) failed: {exc}"
+
+        if ok_count == 0:
+            return False, " || ".join(rejected)
+
+        if rejected:
+            logger.warning(
+                f"{len(rejected)}/{len(vendors)} vendor(s) rejected by Apple. Check passes so the "
+                f"other {ok_count} vendor(s) keep syncing; the sync will skip the rejected "
+                f"vendor(s) and end as failed until Apple access is restored."
+            )
 
         return True, None
 
