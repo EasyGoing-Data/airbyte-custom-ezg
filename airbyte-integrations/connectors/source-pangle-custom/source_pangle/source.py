@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
-# source-pangle-custom v1.0.0
+# source-pangle-custom v1.0.1
 # Pangle Reporting API 2.0 -> BigQuery (doanh thu quang cao lay truc tiep tu Pangle).
 # Khung theo source-pubscale-custom v1.0.1 / source-applovin-max-custom v1.8.0
 # (multi-account, incremental + lookback, cursor theo tung account, khong +1, clamp <= today, guard slice None).
@@ -56,8 +56,11 @@ CODE_QPS_LIMIT = "106"
 KEY_COLUMNS = ["date", "app_id", "ad_slot_id", "region"]   # grain mac dinh cua API: ngay x ad placement x quoc gia
 STRING_COLUMNS = ["region", "app_id", "app_name", "package_name", "ad_slot_id", "code_name", "media_name", "os", "currency"]
 INT_COLUMNS = ["ad_slot_type", "time_zone", "request", "return", "show", "click", "use_mediation", "bidding_type",
-               "ad_request", "response", "app_code_type"]
-FLOAT_COLUMNS = ["fill_rate", "click_rate", "revenue", "ecpm", "ad_fill_rate", "ad_impression_rate"]
+               "ad_request", "response", "ad_slot_type_v2", "media_m_ssr", "app_code_type"]
+FLOAT_COLUMNS = ["fill_rate", "click_rate", "revenue", "ecpm", "ad_fill_rate", "ad_impression_rate", "win_rate"]
+# Cot co trong tai lieu nhung API that khong tra (16/11/2026): van ep kieu neu co, KHONG khai trong schema
+# de bang dich khong co cot toan null.
+UNDECLARED_COLUMNS = {"app_code_type"}
 
 
 class PangleApiError(Exception):
@@ -353,6 +356,8 @@ class PangleReport(Stream, IncrementalMixin):
         for c in STRING_COLUMNS:
             props[c] = {"type": ["null", "string"]}
         for c in INT_COLUMNS + FLOAT_COLUMNS:
+            if c in UNDECLARED_COLUMNS:
+                continue
             props[c] = {"type": ["null", "number"]}
         return {
             "$schema": "http://json-schema.org/draft-07/schema#",

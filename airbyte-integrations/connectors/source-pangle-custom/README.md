@@ -24,7 +24,7 @@ Docs API: https://www.pangleglobal.com/integration/reporting-api-v2
 - Mui gio: luon gui `time_zone=0` (UTC), khong co tuy chon — khop voi bao cao MAX. `currency` mac dinh `usd` (doi duoc).
 - Grain: mac dinh cua API khi khong truyen `dimensions` = ngay x ad placement x quoc gia.
 - PK: `account_name, date, app_id, ad_slot_id, region`.
-- Cot: `region, app_id, app_name, package_name, ad_slot_id, ad_slot_type, code_name, media_name, os, currency, time_zone, request, return, fill_rate, show, click, click_rate, revenue, ecpm, use_mediation, bidding_type, ad_request, response, ad_fill_rate, ad_impression_rate`; cot la passthrough.
+- Cot: `region, app_id, app_name, package_name, ad_slot_id, ad_slot_type, code_name, media_name, os, currency, time_zone, request, return, fill_rate, show, click, click_rate, revenue, ecpm, use_mediation, bidding_type, ad_request, response, ad_fill_rate, ad_impression_rate, ad_slot_type_v2, media_m_ssr, win_rate`; cot la passthrough. `app_code_type` (co trong tai lieu, API that khong tra) khong khai trong schema.
 - `ad_slot_type`: 1 Native, 2 Banner, 3 App Open, 5 Rewarded Video, 6 Interstitial.
 - Cac id -> chuoi; so dem -> so nguyen; `revenue`, `ecpm`, cac ti le -> round 6 so le.
 - Slice = account x cua so `window_days` ngay (mac dinh 7); trong slice moi ngay 1 request. State luu sau moi slice.
@@ -47,12 +47,18 @@ python main.py read     --config secrets/config.json --catalog integration_tests
 
 ## Build (tren VM: /home/data/airbyte-custom-ezg, nhanh `agent/source-pangle-custom`)
 ```bash
-docker build -t dataezg/source-pangle-custom:v1.0.0 .
-docker run --rm dataezg/source-pangle-custom:v1.0.0 spec | head -c 300
-docker push dataezg/source-pangle-custom:v1.0.0
+docker build -t dataezg/source-pangle-custom:v1.0.1 .
+docker run --rm dataezg/source-pangle-custom:v1.0.1 spec | head -c 300
+docker push dataezg/source-pangle-custom:v1.0.1
 ```
-Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-pangle-custom`, tag `v1.0.0`.
+Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-pangle-custom`, tag `v1.0.1`.
 Connection: stream `pangle_report`, Incremental | Append + Deduped -> `airbyte_data_export.pangle_report`.
+
+## v1.0.1 — Changelog
+- Schema khop du lieu that: them `ad_slot_type_v2`, `media_m_ssr`, `win_rate` (API tra nhung v1.0.0 chua khai nen khong thanh cot o BigQuery); bo `app_code_type` khoi schema (API khong tra -> cot toan null). Khong doi PK. Test voi server gia: 25/25 dat.
+- DA xac nhan voi key that (16/11/2026, read 09/11 -> 16/11, 1 account, `user_id` = `role_id`): `check` dat; 3.328 dong; grain mac dinh dung la ngay x app x ad slot x region; PK khong trung, khong null; `currency` = usd, `time_zone` = 0.
+- Doi soat voi AppLovin MAX (ad network `TIKTOK_BIDDING`) 09/11 -> 15/11: MAX 87,95 USD, Pangle 87,97 USD (lech 0,0%).
+- Luu y du lieu that: `region` viet thuong (`jp`) -> viet hoa o dbt stage.
 
 ## v1.0.0 — Changelog
 - Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover / check (key sai bao ro account + Code 101) / chu ky md5 / time_zone=0 + currency=usd / 1 ngay 1 request / read full / incremental lookback 14 / clamp cursor tuong lai / retry Code 106 + HTTP 500 / ngay rong PD0004 / account loi giua chung -> state khong vuot / 3 chot chan / khong lo security_key, sign — 24/24 dat.

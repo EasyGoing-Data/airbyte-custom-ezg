@@ -85,6 +85,7 @@ class Handler(BaseHTTPRequestHandler):
                 "click": 2, "click_rate": 0.25, "currency": q.get("currency"), "date": d.isoformat(), "ecpm": 7.71,
                 "fill_rate": 100, "region": region, "request": 8, "return": 8, "revenue": 0.06123456789, "show": 8,
                 "time_zone": int(q.get("time_zone", 8)),
+                "ad_slot_type_v2": 0, "media_m_ssr": 0, "win_rate": 0.1234567,
             }
             if state["mode"] == "no_slot":
                 row["rit"] = row.pop("ad_slot_id")
@@ -181,6 +182,9 @@ def main():
     streams = next((m["catalog"]["streams"] for m in msgs if m.get("type") == "CATALOG"), [])
     check("discover 1 stream dung ten", [s["name"] for s in streams] == [STREAM], proc.stderr[-300:])
     if streams:
+        _props = streams[0]["json_schema"]["properties"]
+        check("discover schema co 3 cot moi, khong co app_code_type",
+              all(c in _props for c in ("ad_slot_type_v2", "media_m_ssr", "win_rate")) and "app_code_type" not in _props)
         check("discover PK", [p[0] for p in streams[0].get("source_defined_primary_key", [])] == pk,
               str(streams[0].get("source_defined_primary_key")))
         check("discover cursor date + incremental", streams[0].get("default_cursor_field") == ["date"]
