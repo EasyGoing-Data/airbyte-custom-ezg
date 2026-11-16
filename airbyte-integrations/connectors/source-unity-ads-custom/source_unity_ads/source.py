@@ -362,6 +362,7 @@ class UnityAdsMonetization(UnityAdsStream, IncrementalMixin):
                     f"Response thieu cot khoa {missing}; cot nhan duoc: {sorted(rows[0].keys())}. "
                     f"Bo sung COLUMN_ALIASES trong source.py roi sync lai."
                 )
+        seen = set()
         for row in rows:
             raw_ts = row.get("timestamp")
             if not raw_ts:
@@ -393,6 +394,11 @@ class UnityAdsMonetization(UnityAdsStream, IncrementalMixin):
             for k, v in row.items():
                 if k and k not in rec and k != "timestamp" and not isinstance(v, (dict, list)):
                     rec[k] = v
+            pk = tuple(rec.get(c) for c in self.primary_key)
+            if pk in seen:
+                # Trung khoa trong cung 1 response -> grain gia dinh sai; dedup se lam mat doanh thu.
+                raise ValueError(f"Response co 2 dong trung khoa chinh {self.primary_key}: {pk}. Kiem lai group_by / ten cot.")
+            seen.add(pk)
             yield rec
 
     def get_json_schema(self) -> Mapping[str, Any]:

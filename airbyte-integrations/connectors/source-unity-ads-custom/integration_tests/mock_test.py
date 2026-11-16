@@ -71,6 +71,8 @@ class Handler(BaseHTTPRequestHandler):
             d += timedelta(days=1)
         # 1 row ngoai cua so (ngay sau `end`) -> connector phai loc bo
         lines.append(f'{(end + timedelta(days=1)).isoformat()}T00:00:00.000Z,US,Rewarded_Android,android,500{org[:1]},"Game, One",1,1,9.99,1,1')
+        if state.get("dup") and len(lines) > 1:
+            lines.append(lines[1])
         return self._reply(200, "\n".join(lines) + "\n")
 
 
@@ -204,6 +206,13 @@ def main():
           failed and "thieu cot khoa" in (proc.stdout + proc.stderr) and "sgid" in (proc.stdout + proc.stderr) and not records(msgs),
           f"rc={proc.returncode} recs={len(records(msgs))}")
     state["alt_header"] = False
+
+    # 2 dong trung khoa chinh trong 1 response -> dung han
+    state["dup"] = True
+    proc, msgs = run(["read", "--config", cfg, "--catalog", catalog], env)
+    failed = proc.returncode != 0 or any(m.get("type") == "TRACE" and m["trace"].get("type") == "ERROR" for m in msgs)
+    check("trung khoa trong response: sync bao loi", failed and "trung khoa chinh" in (proc.stdout + proc.stderr), f"rc={proc.returncode}")
+    state["dup"] = False
 
     # parser JSON
     sys.path.insert(0, ROOT)
