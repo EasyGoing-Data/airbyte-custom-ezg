@@ -1,0 +1,81 @@
+documentationUrl: https://docs.unity.com/en-us/monetization/performance-and-analytics/api/monetization-stats-api
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Unity Ads Monetization Stats Spec
+  type: object
+  required:
+    - accounts
+    - start_date
+  properties:
+    accounts:
+      title: Unity Accounts
+      description: One entry per Unity organization. API key comes from Unity Monetization dashboard > Settings > API management (Monetization Stats API Access).
+      order: 0
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+          - account_name
+          - organization_core_id
+          - api_key
+        properties:
+          account_name:
+            title: Account Name
+            description: Identifier stored in the account_name column (e.g. data@easygoing.vn)
+            type: string
+          organization_core_id:
+            title: Organization core ID
+            description: Organization core ID of the Unity organization (digits only), shown in the Monetization dashboard settings.
+            type: string
+          api_key:
+            title: Monetization Stats API key
+            description: This organization's Monetization Stats API key (sent as "Authorization Token").
+            type: string
+            airbyte_secret: true
+    start_date:
+      title: Start Date
+      description: Start date (UTC) in YYYY-MM-DD format for the first sync / backfill.
+      order: 1
+      type: string
+      format: date
+    number_days_backward:
+      title: Number of days backward (lookback)
+      description: Each run goes back this many days from the last cursor to refresh recently-updated data. Default 14.
+      order: 2
+      type: integer
+      default: 14
+      minimum: 1
+      maximum: 90
+    get_last_X_days:
+      title: Get last X days only
+      description: If true, ignore Start Date and always fetch only the last X days (X = number of days backward).
+      order: 3
+      type: boolean
+      default: false
+    window_days:
+      title: Days per request
+      description: Date-range width of each API request. The API times out after 60 seconds, lower this if requests time out. Default 7, maximum 31.
+      order: 4
+      type: integer
+      default: 7
+      minimum: 1
+      maximum: 31
+    group_by:
+      title: Group by
+      description: "Report grain (besides date). Allowed: country, placement, platform, game."
+      order: 5
+      type: array
+      items:
+        type: string
+        enum: [country, placement, platform, game]
+      default: [country, placement, platform, game]
+    fields:
+      title: Fields
+      description: "Metrics. Allowed: adrequest_count, available_sum, revenue_sum, start_count, view_count."
+      order: 6
+      type: array
+      items:
+        type: string
+        enum: [adrequest_count, available_sum, revenue_sum, start_count, view_count]
+      default: [adrequest_count, available_sum, revenue_sum, start_count, view_count]
