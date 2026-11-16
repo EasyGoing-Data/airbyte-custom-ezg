@@ -47,6 +47,7 @@ MAX_PAGES = 1000                  # chan vong lap vo han neu API tra total_page 
 MIN_REQUEST_INTERVAL_SEC = 1.1    # tai lieu khong ghi rate limit -> gian 1 request / giay / skey
 REQUEST_TIMEOUT_SEC = 120
 MAX_ATTEMPTS = 5
+SLICE_READ_ATTEMPTS = 3           # so lan doc lai 1 slice khi phan trang khong nhat quan (lech total / trung PK)
 
 DEFAULT_GROUP_BY = ["date", "app_id", "placement_id", "unit_id", "country", "platform"]
 ALLOWED_GROUP_BY = {"date", "app_id", "placement_id", "unit_id", "country", "platform", "bidding_type"}
@@ -314,6 +315,44 @@ class MintegralReport(Stream, IncrementalMixin):
                 rec[k] = v
         return rec
 
+    def _read_slice(self, skey: str, secret: str, base_params: Mapping[str, Any], account_name: str) -> Tuple[List[Dict[str, Any]], str]:
+        """Doc moi trang cua 1 slice. Tra (records, problem); problem != '' nghia la phan trang khong nhat quan."""
+        recs: List[Dict[str, Any]] = []
+        raw_count = 0
+        total: Optional[int] = None
+        page = 1
+        while page <= MAX_PAGES:
+            params = dict(base_params)
+            params["page"] = page
+            data = call_report_api(skey, secret, params)
+            rows = [r for r in (data.get("lists") or []) if isinstance(r, dict)]
+            if page == 1:
+                if data.get("total") not in (None, ""):
+                    total = _to_int(data.get("total"), -1)
+                if rows:
+                    # Thieu cot khoa -> PK = null -> Airbyte dedup gop nham row. Dung han thay vi nap du lieu sai.
+                    missing = [g for g in self.group_by if g not in rows[0]]
+                    if missing:
+                        raise MintegralApiError(f"Response thieu cot khoa {missing}; cot nhan duoc: {sorted(rows[0].keys())}")
+            raw_count += len(rows)
+            for row in rows:
+                rec = self._build_record(row, account_name)
+                if rec is not None:
+                    recs.append(rec)
+            total_page = _to_int(data.get("total_page"), 0)
+            if total_page:
+                if page >= total_page:
+                    break
+            elif len(rows) < self.page_size:  # API khong tra total_page -> dung khi trang chua day
+                break
+            page += 1
+        if total is not None and total >= 0 and raw_count != total:
+            return recs, f"doc duoc {raw_count} dong, API bao total={total}"
+        keys = {tuple(rec.get(k) for k in self.primary_key) for rec in recs}
+        if len(keys) != len(recs):
+            return recs, f"{len(recs) - len(keys)} dong trung khoa chinh"
+        return recs, ""
+
     def read_records(self, sync_mode, cursor_field=None, stream_slice=None, stream_state=None) -> Iterable[Mapping[str, Any]]:
         s = stream_slice or {}
         account_name = s.get("account_name")
@@ -329,32 +368,25 @@ class MintegralReport(Stream, IncrementalMixin):
             "group_by": ",".join(self.group_by),
             "limit": self.page_size,
         }
-        page = 1
-        while page <= MAX_PAGES:
-            params = dict(base_params)
-            params["page"] = page
+        # Doc het cac trang cua slice vao bo nho roi moi phat record: API khong co order_by nen phan trang
+        # co the trung / thieu dong neu du lieu doi giua chung -> doi chieu voi `total` + PK unique, lech thi doc lai.
+        slice_label = f"Account '{account_name}' {start_raw}..{end_raw}"
+        recs: List[Dict[str, Any]] = []
+        for attempt in range(1, SLICE_READ_ATTEMPTS + 1):
             try:
-                data = call_report_api(skey, secret, params)
+                recs, problem = self._read_slice(skey, secret, base_params, account_name)
             except MintegralApiError as exc:
-                raise MintegralApiError(f"Account '{account_name}' {start_raw}..{end_raw} page {page}: {exc}") from None
-            rows = data.get("lists") or []
-            for row in rows:
-                if not isinstance(row, dict):
-                    continue
-                rec = self._build_record(row, account_name)
-                if rec is None:
-                    continue
-                record_cursor_value = pendulum.parse(rec["date"]).date()
-                prev = self._cursor_by_account.get(account_name)
-                self._cursor_by_account[account_name] = max(prev, record_cursor_value) if prev else record_cursor_value
-                yield rec
-            total_page = _to_int(data.get("total_page"), 0)
-            if total_page:
-                if page >= total_page:
-                    break
-            elif len(rows) < self.page_size:  # API khong tra total_page -> dung khi trang chua day
+                raise MintegralApiError(f"{slice_label}: {exc}") from None
+            if not problem:
                 break
-            page += 1
+            if attempt == SLICE_READ_ATTEMPTS:
+                raise MintegralApiError(f"{slice_label}: phan trang khong nhat quan sau {attempt} lan doc ({problem})")
+            self.logger.warning(f"{slice_label}: {problem} — doc lai slice (lan {attempt + 1}/{SLICE_READ_ATTEMPTS})")
+        for rec in recs:
+            record_cursor_value = pendulum.parse(rec["date"]).date()
+            prev = self._cursor_by_account.get(account_name)
+            self._cursor_by_account[account_name] = max(prev, record_cursor_value) if prev else record_cursor_value
+            yield rec
         # Slice doc xong (moi trang OK) -> account nay coi nhu da phu den end_date, ke ca khi slice rong.
         end_date = pendulum.parse(str(end_raw)).date()
         prev = self._cursor_by_account.get(account_name)

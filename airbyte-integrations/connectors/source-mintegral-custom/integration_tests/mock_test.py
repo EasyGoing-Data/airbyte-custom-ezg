@@ -96,8 +96,10 @@ class Handler(BaseHTTPRequestHandler):
             rows = []
         total_page = max(1, -(-len(rows) // limit))
         chunk = rows[(page - 1) * limit: page * limit]
+        if state.get("drop_unit"):
+            chunk = [{k: v for k, v in r.items() if k != "unit_id"} for r in chunk]
         return self._json(200, {"code": "ok", "data": {
-            "total": len(rows), "page": page, "limit": limit, "total_page": total_page,
+            "total": len(rows) + (1 if state.get("bad_total") else 0), "page": page, "limit": limit, "total_page": total_page,
             "start": q["start"], "end": q["end"], "timezone": 0, "ad_format": "", "lists": chunk,
         }})
 
@@ -251,6 +253,27 @@ def main():
           str(st_after))
     check("account 2 loi: khong lo skey / secret / sign", not leaked(proc))
     state["fail_skey2_after"] = None
+
+    def errored(proc, msgs):
+        return proc.returncode != 0 or any(m.get("type") == "TRACE" and m["trace"].get("type") == "ERROR" for m in msgs)
+
+    # total lech so dong doc duoc -> doc lai 3 lan roi dung, khong nap record nao
+    state["bad_total"] = True
+    state["requests"].clear()
+    proc, msgs = run(["read", "--config", cfg, "--catalog", catalog], env)
+    check("total lech: sync bao loi, 0 record", errored(proc, msgs) and "khong nhat quan" in (proc.stdout + proc.stderr) and not records(msgs),
+          f"rc={proc.returncode} recs={len(records(msgs))}")
+    check("total lech: da doc lai slice 3 lan", len([r for r in state["requests"] if r["page"] == 1]) == 3, str(len(state["requests"])))
+    check("total lech: khong lo skey / secret / sign", not leaked(proc))
+    state["bad_total"] = False
+
+    # response thieu cot khoa -> dung han, khong nap record nao
+    state["drop_unit"] = True
+    proc, msgs = run(["read", "--config", cfg, "--catalog", catalog], env)
+    check("thieu cot khoa: sync bao loi, neu ten cot, 0 record",
+          errored(proc, msgs) and "thieu cot khoa ['unit_id']" in (proc.stdout + proc.stderr) and not records(msgs),
+          f"rc={proc.returncode} recs={len(records(msgs))}")
+    state["drop_unit"] = False
 
     # cursor tuong lai -> clamp
     st[0]["stream"]["stream_state"]["date"] = (TODAY + timedelta(days=30)).isoformat()

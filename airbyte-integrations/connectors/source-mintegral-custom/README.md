@@ -26,6 +26,8 @@ Docs API: https://cdn-adn-https.rayjump.com/cdn-adn/reporting_api/MintegralRA.ht
 - PK: `account_name` + `group_by`.
 - `date` API tra dang so `20190506` -> doi thanh `2019-05-06`. Cac id -> chuoi. Metric float round 6 so le.
 - Slice = account x cua so `window_days` ngay (mac dinh 7 = toi da cua API); moi slice phan trang theo `total_page`.
+- API khong co order_by -> moi slice doc het cac trang vao bo nho, doi chieu so dong voi `total` va PK unique roi moi phat record; lech thi doc lai slice (toi da 3 lan), van lech thi sync DUNG.
+- Response thieu cot khoa -> sync DUNG va bao ten cot nhan duoc (tranh PK null lam dedup gop nham dong).
 - Start som hon 60 ngay -> tu clamp ve hom nay - 60 va ghi warning (du lieu cu hon KHONG lay duoc qua API).
 - Incremental: start = cursor - `number_days_backward` (mac dinh **14**); `get_last_X_days` bo qua start_date; cursor khong +1, clamp <= today (UTC).
 - Cursor theo TUNG account; state emit = MIN(max_date cac account). Account nao loi giua chung thi state dung o cua so cuoi account do doc xong.
@@ -54,5 +56,5 @@ Connection: stream `mintegral_report`, Incremental | Append + Deduped -> `airbyt
 Luu y: API chi giu 60 ngay -> bat connection cang som cang giu duoc nhieu lich su; neu connection dung qua 46 ngay thi mat du lieu (lookback 14).
 
 ## v1.0.0 — Changelog
-- Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover / check (secret sai bao ro account) / chu ky md5 khop vi du tai lieu / read full co phan trang / clamp 60 ngay / incremental lookback 14 / clamp cursor tuong lai / retry HTTP 500 / account loi giua chung -> state khong vuot / khong lo skey, secret, sign — 28/28 dat.
+- Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover / check (secret sai bao ro account) / chu ky md5 khop vi du tai lieu / read full co phan trang / clamp 60 ngay / incremental lookback 14 / clamp cursor tuong lai / retry HTTP 500 / account loi giua chung -> state khong vuot / phan trang lech total thi doc lai roi dung / thieu cot khoa thi dung / khong lo skey, secret, sign — 32/32 dat.
 - CHUA xac nhan voi key that. Can kiem khi co key: (1) ma `code` API tra khi khong co du lieu (hien coi `ok` + `lists` rong la khong co du lieu), (2) don vi tien cua `est_revenue`, (3) gioi han 60 ngay tinh chinh xac the nao (hien clamp hom nay - 60), (4) rate limit thuc te, (5) PK unique tren du lieu that.
