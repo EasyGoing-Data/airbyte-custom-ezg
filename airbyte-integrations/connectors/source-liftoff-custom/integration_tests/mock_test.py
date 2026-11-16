@@ -69,6 +69,7 @@ class Handler(BaseHTTPRequestHandler):
                     "application id": "586e201e242e3fd30800022" + acc, "application name": "Game One",
                     "placement id": None if country == "VN" else "12345678", "placement name": None if country == "VN" else "Level 3",
                     "placement reference id": None if country == "VN" else "REWARD-0000001",
+                    "incentivized": True, "adType": "video",
                     "impressions": 100, "views": 90, "completes": 80, "clicks": 5, "revenue": 1.23456789, "ecpm": 13.72,
                 }
                 if state["mode"] == "no_app_id":
@@ -78,7 +79,7 @@ class Handler(BaseHTTPRequestHandler):
         # 1 row ngoai cua so -> connector phai loc bo
         rows.append({"platform": "android", "date": (end + timedelta(days=1)).isoformat(), "country": "US",
                      "application id": "586e201e242e3fd30800022" + acc, "application name": "Game One",
-                     "placement id": "12345678", "placement name": "Level 3",
+                     "placement id": "12345678", "placement name": "Level 3", "incentivized": True, "adType": "video",
                      "impressions": 1, "views": 1, "completes": 1, "clicks": 1, "revenue": 9.99, "ecpm": 1})
         if state["mode"] == "dup":
             rows.append(dict(rows[0]))
@@ -145,7 +146,7 @@ def main():
     }
     cfg = write("config.json", config)
     catalog = os.path.join(ROOT, "integration_tests", "configured_catalog.json")
-    pk = ["account_name", "date", "application_id", "placement_id", "country", "platform"]
+    pk = ["account_name", "date", "application_id", "placement_id", "country", "platform", "incentivized", "ad_type"]
 
     # spec
     proc, msgs = run(["spec"], env)
@@ -189,6 +190,7 @@ def main():
     check("read full: cot co dau cach -> snake_case", all(r.get("application_id", "").startswith("586e201e") and r.get("application_name") == "Game One" for r in recs))
     check("read full: placement null giu null (SDK cu)", all(r["placement_id"] is None for r in recs if r["country"] == "VN"))
     check("read full: placement_reference_id co trong record", all(r.get("placement_reference_id") == (None if r["country"] == "VN" else "REWARD-0000001") for r in recs))
+    check("read full: incentivized -> chuoi true/false, adType -> ad_type", all(r.get("incentivized") == "true" and r.get("ad_type") == "video" for r in recs))
     check("read full: revenue round 6, views int", all(r["revenue"] == 1.234568 and r["views"] == 90 for r in recs))
     check("read full: state cuoi = hom nay (UTC)", last_state(msgs) == TODAY.isoformat(), str(last_state(msgs)))
     check("read full: khong lo key ra stdout/stderr", "fake_key_" not in proc.stdout + proc.stderr)

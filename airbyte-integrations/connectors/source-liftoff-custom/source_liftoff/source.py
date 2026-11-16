@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
-# source-liftoff-custom v1.0.1
+# source-liftoff-custom v1.0.2
 # Liftoff Monetize (Vungle) Publisher Reporting API 2.0 -> BigQuery (doanh thu quang cao lay truc tiep tu Liftoff / Vungle).
 # Khung theo source-pubscale-custom v1.0.1 / source-applovin-max-custom v1.8.0
 # (multi-account, incremental + lookback, cursor theo tung account, khong +1, clamp <= today, guard slice None).
@@ -44,7 +44,8 @@ MAX_HISTORY_DAYS = 180            # API: lich su toi da 6 thang
 MIN_REQUEST_INTERVAL_SEC = 1.1    # tai lieu khong ghi rate limit -> gian 1 request / giay / key
 REQUEST_TIMEOUT_SEC = 180
 
-DEFAULT_DIMENSIONS = ["date", "application", "placement", "country", "platform"]
+# v1.0.2: them incentivized + adType vao mac dinh de bang co tang "ad type" (Giam doc yeu cau 16/11/2026).
+DEFAULT_DIMENSIONS = ["date", "application", "placement", "country", "platform", "incentivized", "adType"]
 ALLOWED_DIMENSIONS = {"date", "application", "placement", "country", "platform", "incentivized", "adType", "adSize"}
 DEFAULT_AGGREGATES = ["impressions", "views", "completes", "clicks", "revenue", "ecpm"]
 ALLOWED_AGGREGATES = set(DEFAULT_AGGREGATES)

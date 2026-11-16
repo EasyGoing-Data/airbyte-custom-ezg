@@ -64,7 +64,7 @@ connectionSpecification:
       items:
         type: string
         enum: [date, application, placement, country, platform, incentivized, adType, adSize]
-      default: [date, application, placement, country, platform]
+      default: [date, application, placement, country, platform, incentivized, adType]
     aggregates:
       title: Aggregates
       description: "Metrics. Allowed: impressions, views, completes, clicks, revenue, ecpm."

@@ -19,7 +19,7 @@ Docs API: https://support.vungle.com/hc/en-us/articles/211365828-Publisher-Repor
 
 ## Connector
 - Config `accounts[]`: `account_name`, `api_key` (secret).
-- Grain mac dinh: `date, application, placement, country, platform` (doi duoc qua `dimensions`; them duoc `incentivized, adType, adSize`).
+- Grain mac dinh: `date, application, placement, country, platform, incentivized, adType` (doi duoc qua `dimensions`; them duoc `adSize`). `incentivized` + `adType` cho tang "ad type": co thuong / khong thuong va video / mrec / banner.
 - Metric mac dinh: `impressions, views, completes, clicks, revenue, ecpm` (doi duoc qua `aggregates`).
 - Ten cot chuan hoa ve snake_case: `application_id, application_name, placement_id, placement_name, placement_reference_id, ad_type, ad_size`.
 - PK: `account_name, date` + cot khoa cua tung dimension (`application` -> `application_id`, `placement` -> `placement_id`).
@@ -46,12 +46,16 @@ python main.py read     --config secrets/config.json --catalog integration_tests
 
 ## Build (tren VM: /home/data/airbyte-custom-ezg, nhanh `agent/source-liftoff-custom`)
 ```bash
-docker build -t dataezg/source-liftoff-custom:v1.0.1 .
-docker run --rm dataezg/source-liftoff-custom:v1.0.1 spec | head -c 300
-docker push dataezg/source-liftoff-custom:v1.0.1
+docker build -t dataezg/source-liftoff-custom:v1.0.2 .
+docker run --rm dataezg/source-liftoff-custom:v1.0.2 spec | head -c 300
+docker push dataezg/source-liftoff-custom:v1.0.2
 ```
-Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-liftoff-custom`, tag `v1.0.1`.
+Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-liftoff-custom`, tag `v1.0.2`.
 Connection: stream `liftoff_report`, Incremental | Append + Deduped -> `airbyte_data_export.liftoff_report`.
+
+## v1.0.2 — Changelog
+- Bat mac dinh 2 dimension `incentivized` va `adType` de bang du 7 tang tach du lieu: account, app, app_id, platform, country, date, ad type. PK them `incentivized`, `ad_type`. Source da tao tu v1.0.1 voi `dimensions` nhap tay thi phai them 2 gia tri nay trong cau hinh. Test voi server gia: 28/28 dat.
+- CHUA thu key that voi 2 dimension moi: can kiem gia tri that cua `ad_type` / `incentivized`, co null khong (null trong PK thi connector dung), PK con unique khong, tong doanh thu co khop ban v1.0.1 khong.
 
 ## v1.0.1 — Changelog
 - Them cot `placement_reference_id` vao schema (API that tra cot nay kem dimension `placement`; v1.0.0 chi passthrough, khong khai trong schema nen khong thanh cot o BigQuery). Khong doi PK. Test voi server gia: 27/27 dat.

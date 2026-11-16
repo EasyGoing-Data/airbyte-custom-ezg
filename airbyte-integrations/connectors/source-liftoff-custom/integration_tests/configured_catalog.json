@@ -11,7 +11,7 @@
       "sync_mode": "incremental",
       "cursor_field": ["date"],
       "destination_sync_mode": "append_dedup",
-      "primary_key": [["account_name"], ["date"], ["application_id"], ["placement_id"], ["country"], ["platform"]]
+      "primary_key": [["account_name"], ["date"], ["application_id"], ["placement_id"], ["country"], ["platform"], ["incentivized"], ["ad_type"]]
     }
   ]
 }
