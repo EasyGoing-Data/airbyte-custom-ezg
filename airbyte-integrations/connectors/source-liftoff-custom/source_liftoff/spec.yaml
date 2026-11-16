@@ -1,0 +1,76 @@
+documentationUrl: https://support.vungle.com/hc/en-us/articles/211365828-Publisher-Reporting-API-2-0
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Liftoff Monetize (Vungle) Publisher Reporting Spec
+  type: object
+  required:
+    - accounts
+    - start_date
+  properties:
+    accounts:
+      title: Liftoff Accounts
+      description: One entry per Liftoff Monetize (Vungle) publisher account. The Reporting API key is on the Reports page of the Liftoff dashboard (one key for all apps of the account).
+      order: 0
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+          - account_name
+          - api_key
+        properties:
+          account_name:
+            title: Account Name
+            description: Identifier stored in the account_name column (e.g. data@easygoing.vn)
+            type: string
+          api_key:
+            title: Reporting API Key
+            description: This account's Publisher Reporting API key (sent as "Authorization Bearer").
+            type: string
+            airbyte_secret: true
+    start_date:
+      title: Start Date
+      description: Start date (UTC) in YYYY-MM-DD format for the first sync / backfill. The API keeps about six months of history, earlier dates are clamped to 180 days ago.
+      order: 1
+      type: string
+      format: date
+    number_days_backward:
+      title: Number of days backward (lookback)
+      description: Each run goes back this many days from the last cursor to refresh recently-updated data. Default 14.
+      order: 2
+      type: integer
+      default: 14
+      minimum: 1
+      maximum: 90
+    get_last_X_days:
+      title: Get last X days only
+      description: If true, ignore Start Date and always fetch only the last X days (X = number of days backward).
+      order: 3
+      type: boolean
+      default: false
+    window_days:
+      title: Days per request
+      description: Date-range width of each API request. Default 7, maximum 31.
+      order: 4
+      type: integer
+      default: 7
+      minimum: 1
+      maximum: 31
+    dimensions:
+      title: Dimensions
+      description: "Report grain. Allowed: date, application, placement, country, platform, incentivized, adType, adSize. 'date' is always included."
+      order: 5
+      type: array
+      items:
+        type: string
+        enum: [date, application, placement, country, platform, incentivized, adType, adSize]
+      default: [date, application, placement, country, platform, incentivized, adType]
+    aggregates:
+      title: Aggregates
+      description: "Metrics. Allowed: impressions, views, completes, clicks, revenue, ecpm."
+      order: 6
+      type: array
+      items:
+        type: string
+        enum: [impressions, views, completes, clicks, revenue, ecpm]
+      default: [impressions, views, completes, clicks, revenue, ecpm]
