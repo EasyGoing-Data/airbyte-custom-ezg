@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
-# source-liftoff-custom v1.0.0
+# source-liftoff-custom v1.0.1
 # Liftoff Monetize (Vungle) Publisher Reporting API 2.0 -> BigQuery (doanh thu quang cao lay truc tiep tu Liftoff / Vungle).
 # Khung theo source-pubscale-custom v1.0.1 / source-applovin-max-custom v1.8.0
 # (multi-account, incremental + lookback, cursor theo tung account, khong +1, clamp <= today, guard slice None).
@@ -54,7 +54,7 @@ INT_AGGREGATES = {"impressions", "views", "completes", "clicks"}
 DIMENSION_COLUMNS = {
     "date": ["date"],
     "application": ["application_id", "application_name"],
-    "placement": ["placement_id", "placement_name"],
+    "placement": ["placement_id", "placement_name", "placement_reference_id"],
     "country": ["country"],
     "platform": ["platform"],
     "incentivized": ["incentivized"],

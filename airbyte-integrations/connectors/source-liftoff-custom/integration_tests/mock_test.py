@@ -68,6 +68,7 @@ class Handler(BaseHTTPRequestHandler):
                     "platform": "android", "date": d.isoformat(), "country": country,
                     "application id": "586e201e242e3fd30800022" + acc, "application name": "Game One",
                     "placement id": None if country == "VN" else "12345678", "placement name": None if country == "VN" else "Level 3",
+                    "placement reference id": None if country == "VN" else "REWARD-0000001",
                     "impressions": 100, "views": 90, "completes": 80, "clicks": 5, "revenue": 1.23456789, "ecpm": 13.72,
                 }
                 if state["mode"] == "no_app_id":
@@ -160,6 +161,7 @@ def main():
     streams = next((m["catalog"]["streams"] for m in msgs if m.get("type") == "CATALOG"), [])
     check("discover 1 stream dung ten", [s["name"] for s in streams] == [STREAM], proc.stderr[-300:])
     if streams:
+        check("discover schema co placement_reference_id", "placement_reference_id" in streams[0]["json_schema"]["properties"])
         check("discover PK", [p[0] for p in streams[0].get("source_defined_primary_key", [])] == pk,
               str(streams[0].get("source_defined_primary_key")))
         check("discover cursor date", streams[0].get("default_cursor_field") == ["date"])
@@ -186,6 +188,7 @@ def main():
     check("read full: row ngoai cua so bi loc", all(r["revenue"] != 9.99 for r in recs))
     check("read full: cot co dau cach -> snake_case", all(r.get("application_id", "").startswith("586e201e") and r.get("application_name") == "Game One" for r in recs))
     check("read full: placement null giu null (SDK cu)", all(r["placement_id"] is None for r in recs if r["country"] == "VN"))
+    check("read full: placement_reference_id co trong record", all(r.get("placement_reference_id") == (None if r["country"] == "VN" else "REWARD-0000001") for r in recs))
     check("read full: revenue round 6, views int", all(r["revenue"] == 1.234568 and r["views"] == 90 for r in recs))
     check("read full: state cuoi = hom nay (UTC)", last_state(msgs) == TODAY.isoformat(), str(last_state(msgs)))
     check("read full: khong lo key ra stdout/stderr", "fake_key_" not in proc.stdout + proc.stderr)

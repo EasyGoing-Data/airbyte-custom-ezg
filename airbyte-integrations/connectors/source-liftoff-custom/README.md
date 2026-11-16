@@ -21,7 +21,7 @@ Docs API: https://support.vungle.com/hc/en-us/articles/211365828-Publisher-Repor
 - Config `accounts[]`: `account_name`, `api_key` (secret).
 - Grain mac dinh: `date, application, placement, country, platform` (doi duoc qua `dimensions`; them duoc `incentivized, adType, adSize`).
 - Metric mac dinh: `impressions, views, completes, clicks, revenue, ecpm` (doi duoc qua `aggregates`).
-- Ten cot chuan hoa ve snake_case: `application_id, application_name, placement_id, placement_name, ad_type, ad_size`.
+- Ten cot chuan hoa ve snake_case: `application_id, application_name, placement_id, placement_name, placement_reference_id, ad_type, ad_size`.
 - PK: `account_name, date` + cot khoa cua tung dimension (`application` -> `application_id`, `placement` -> `placement_id`).
 - `placement_id` co the null voi app dung SDK <= 4.1 (Liftoff khong tach placement) — giu null.
 - Mui gio: UTC (API khong co lua chon khac), khop voi bao cao MAX.
@@ -46,12 +46,17 @@ python main.py read     --config secrets/config.json --catalog integration_tests
 
 ## Build (tren VM: /home/data/airbyte-custom-ezg, nhanh `agent/source-liftoff-custom`)
 ```bash
-docker build -t dataezg/source-liftoff-custom:v1.0.0 .
-docker run --rm dataezg/source-liftoff-custom:v1.0.0 spec | head -c 300
-docker push dataezg/source-liftoff-custom:v1.0.0
+docker build -t dataezg/source-liftoff-custom:v1.0.1 .
+docker run --rm dataezg/source-liftoff-custom:v1.0.1 spec | head -c 300
+docker push dataezg/source-liftoff-custom:v1.0.1
 ```
-Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-liftoff-custom`, tag `v1.0.0`.
+Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-liftoff-custom`, tag `v1.0.1`.
 Connection: stream `liftoff_report`, Incremental | Append + Deduped -> `airbyte_data_export.liftoff_report`.
+
+## v1.0.1 — Changelog
+- Them cot `placement_reference_id` vao schema (API that tra cot nay kem dimension `placement`; v1.0.0 chi passthrough, khong khai trong schema nen khong thanh cot o BigQuery). Khong doi PK. Test voi server gia: 27/27 dat.
+- DA xac nhan voi key that (16/11/2026, read 09/11 -> 16/11, 1 account): `check` dat; 1.319 dong; ten cot that khop gia dinh (`application_id, application_name, placement_id, placement_name, country, platform` + 6 metric); PK khong trung, khong null.
+- Luu y du lieu that: `platform` viet khong dong nhat (`iOS`, `android`) -> chuan hoa o dbt stage. Chua xac nhan: don vi tien cua `revenue`, hanh vi khi `start` cu hon 6 thang, rate limit.
 
 ## v1.0.0 — Changelog
 - Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover / check (key sai bao ro account, khong lo key) / read full / incremental lookback 14 / clamp 180 ngay / clamp cursor tuong lai / retry 429 / slice rong / loc row ngoai cua so / thieu cot khoa va trung khoa thi dung — 25/25 dat.
