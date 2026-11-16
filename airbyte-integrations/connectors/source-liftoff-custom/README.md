@@ -55,7 +55,7 @@ Connection: stream `liftoff_report`, Incremental | Append + Deduped -> `airbyte_
 
 ## v1.0.2 — Changelog
 - Bat mac dinh 2 dimension `incentivized` va `adType` de bang du 7 tang tach du lieu: account, app, app_id, platform, country, date, ad type. PK them `incentivized`, `ad_type`. Source da tao tu v1.0.1 voi `dimensions` nhap tay thi phai them 2 gia tri nay trong cau hinh. Test voi server gia: 28/28 dat.
-- CHUA thu key that voi 2 dimension moi: can kiem gia tri that cua `ad_type` / `incentivized`, co null khong (null trong PK thi connector dung), PK con unique khong, tong doanh thu co khop ban v1.0.1 khong.
+- DA thu key that voi 2 dimension moi (16/11/2026, read 09/11 -> 16/11): 1.331 dong; `ad_type` toan `video`; `incentivized` = `true` o placement Reward, `false` o placement Inter; khong null; PK khong trung; so dong khong tang so voi grain cu (moi placement chi co 1 loai); tong doanh thu 09/11 -> 15/11 van 130,16 USD (khop MAX). Tang ad type o dbt: incentivized true -> rewarded, false -> interstitial.
 
 ## v1.0.1 — Changelog
 - Them cot `placement_reference_id` vao schema (API that tra cot nay kem dimension `placement`; v1.0.0 chi passthrough, khong khai trong schema nen khong thanh cot o BigQuery). Khong doi PK. Test voi server gia: 27/27 dat.
