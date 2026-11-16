@@ -1,0 +1,81 @@
+documentationUrl: https://cdn-adn-https.rayjump.com/cdn-adn/reporting_api/MintegralRA.html?v=3.0
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: Mintegral Reporting Spec
+  type: object
+  required:
+    - accounts
+    - start_date
+  properties:
+    accounts:
+      title: Mintegral Accounts
+      description: One entry per Mintegral publisher account. Skey and Secret come from the Mintegral dashboard > Account > API Tools > Report API.
+      order: 0
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+          - account_name
+          - skey
+          - secret
+        properties:
+          account_name:
+            title: Account Name
+            description: Identifier stored in the account_name column (e.g. data@easygoing.vn)
+            type: string
+          skey:
+            title: Skey
+            description: Report API Skey of this account.
+            type: string
+            airbyte_secret: true
+          secret:
+            title: Secret
+            description: Report API Secret of this account (used to sign requests, never sent).
+            type: string
+            airbyte_secret: true
+    start_date:
+      title: Start Date
+      description: Start date (UTC) in YYYY-MM-DD format for the first sync / backfill. The API only serves the last 60 days, earlier dates are clamped.
+      order: 1
+      type: string
+      format: date
+    number_days_backward:
+      title: Number of days backward (lookback)
+      description: Each run goes back this many days from the last cursor to refresh recently-updated data. Default 14. The API only serves the last 60 days.
+      order: 2
+      type: integer
+      default: 14
+      minimum: 1
+      maximum: 60
+    get_last_X_days:
+      title: Get last X days only
+      description: If true, ignore Start Date and always fetch only the last X days (X = number of days backward).
+      order: 3
+      type: boolean
+      default: false
+    window_days:
+      title: Days per request
+      description: Date-range width of each API request. API maximum is 7. Default 7.
+      order: 4
+      type: integer
+      default: 7
+      minimum: 1
+      maximum: 7
+    page_size:
+      title: Page size
+      description: Rows per page (limit). API maximum is 10000. Default 10000.
+      order: 5
+      type: integer
+      default: 10000
+      minimum: 1
+      maximum: 10000
+    group_by:
+      title: Group by
+      description: "Report grain. Allowed: date, app_id, placement_id, unit_id, country, platform, bidding_type. 'date' is always included."
+      order: 6
+      type: array
+      items:
+        type: string
+        enum: [date, app_id, placement_id, unit_id, country, platform, bidding_type]
+      default: [date, app_id, placement_id, unit_id, country, platform]
