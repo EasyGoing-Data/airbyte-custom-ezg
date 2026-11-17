@@ -52,6 +52,11 @@ META_SOURCE_REF   = _normalize("source_ref")     # _source_ref_
 
 # ─── Base Stream ──────────────────────────────────────────────────────────────
 
+# Co trong thong bao loi khi Apple tu choi vendor (401 / 403). source.read() dua vao day
+# de giu job `failed` cho truong hop nay (khac voi loi stream thong thuong).
+VENDOR_REJECTED_MARKER = "Apple rejected"
+
+
 class BaseAppStoreStream(Stream, IncrementalMixin, ABC):
     """
     Base class for all Apple App Store streams.
@@ -214,7 +219,7 @@ class BaseAppStoreStream(Stream, IncrementalMixin, ABC):
             if rejected < total else "No vendor was synced."
         )
         message = (
-            f"Stream {self.name}: Apple rejected {rejected} of {total} vendor(s): "
+            f"Stream {self.name}: {VENDOR_REJECTED_MARKER} {rejected} of {total} vendor(s): "
             f"{details} -- {synced} Fix access for the rejected vendor(s) in App Store "
             f"Connect; the next sync backfills them automatically."
         )

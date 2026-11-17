@@ -91,7 +91,13 @@ toàn bộ phần sau của file mà không báo gì.
 - Stream nào lỗi thì log `WARNING stream '<tên>' failed; continuing with the remaining streams`,
   các stream còn lại vẫn chạy hết và lưu cursor.
 - Cuối lượt log `WARNING sync finished with failed stream(s): ... Streams synced normally: ...`.
-- Job vẫn kết thúc `failed` khi có stream lỗi (không im lặng thiếu dữ liệu).
+- Kết quả job khi có stream lỗi:
+  - Còn ít nhất 1 stream chạy xong và lỗi không phải do Apple từ chối vendor: job **`succeeded`**,
+    lỗi chỉ nằm trong log (`WARNING stream '<tên>' error: ...`, kèm
+    `Job is reported as succeeded; check the warnings above`). Stream lỗi vẫn mang trạng thái
+    `INCOMPLETE`. Muốn biết có stream lỗi phải xem log của job.
+  - Apple từ chối vendor (401 / 403): job `failed` như mục trên.
+  - Không stream nào chạy xong: job `failed`.
 
 ## Test
 

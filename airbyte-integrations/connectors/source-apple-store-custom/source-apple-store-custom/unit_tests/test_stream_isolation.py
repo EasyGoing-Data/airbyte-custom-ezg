@@ -1,6 +1,6 @@
 """
-Test ban 0.9.4: 1 stream loi thi ghi canh bao, cac stream con lai van chay het;
-va stream financial_report_detail doc du file co dong trong Transaction Date.
+Test ban 0.9.4: 1 stream loi thi ghi canh bao, cac stream con lai van chay het va job
+van `succeeded`; va stream financial_report_detail doc du file co dong trong Transaction Date.
 
 Chay bang source.read() that cua CDK, khong goi Apple that. Du lieu la du lieu gia.
 
@@ -19,6 +19,7 @@ from source_apple_store_custom.client import AppStoreClient
 
 from test_finance_detail_parser import ROWS, SUMMARY, _file
 from test_vendor_isolation import (
+    BAD,
     GOOD,
     FakeApple,
     FakeResponse,
@@ -60,14 +61,19 @@ def no_sleep():
         yield sleep
 
 
-def _read_with(fake, *streams):
+def _error_traces(messages):
+    return [m["trace"]["error"]["message"] for m in messages
+            if m["type"] == "TRACE" and m["trace"]["type"] == "ERROR"]
+
+
+def _read_with(fake, *streams, vendors=(GOOD,)):
     with patch.object(client_module.requests, "get", side_effect=fake.get), \
          patch.object(AppStoreClient, "_auth_headers",
                       lambda self: {"Authorization": f"Bearer {self._key_id}"}):
-        return _run_read(_config([GOOD]), _catalog(*streams))
+        return _run_read(_config(list(vendors)), _catalog(*streams))
 
 
-def test_failing_stream_is_warned_and_remaining_streams_still_run(no_sleep, caplog):
+def test_failing_stream_is_warned_remaining_streams_run_and_job_succeeds(no_sleep, caplog):
     fake = FakeAppleFinance(detail_status=500)
 
     # Stream loi dung DAU catalog: cac stream sau no van phai duoc chay.
@@ -84,13 +90,46 @@ def test_failing_stream_is_warned_and_remaining_streams_still_run(no_sleep, capl
     assert [r["_SKU_"] for r in _records(messages, "summary_sales")] == ["sku.one"]
     assert _states(messages, "summary_sales")[-1] == {"222": {"_Begin_Date_": _yesterday()}}
 
-    # 3. Co canh bao neu ro stream loi va stream chay tot.
+    # 3. Co canh bao neu ro stream loi, ly do, va stream chay tot.
     assert "stream 'financial_report_detail' failed; continuing with the remaining streams" in caplog.text
+    assert "WARNING stream 'financial_report_detail' error:" in caplog.text
+    assert "500 Client Error" in caplog.text
     assert "sync finished with failed stream(s): financial_report_detail" in caplog.text
     assert "Streams synced normally: financial_report, summary_sales" in caplog.text
+    assert "Job is reported as succeeded" in caplog.text
 
-    # 4. Job van bao that bai (khong im lang).
-    assert error is not None
+    # 4. Job KHONG that bai: khong nem loi, khong phat error trace.
+    assert error is None
+    assert _error_traces(messages) == []
+
+
+def test_job_fails_when_no_stream_completes(no_sleep, caplog):
+    fake = FakeAppleFinance(detail_status=500)
+
+    with caplog.at_level(logging.WARNING, logger="airbyte"):
+        messages, error = _read_with(fake, "financial_report_detail")
+
+    assert error is not None                                   # khong co gi chay xong -> failed
+    assert _statuses(messages, "financial_report_detail")[-1] == "INCOMPLETE"
+    assert len(_error_traces(messages)) == 1                   # error trace van duoc phat
+    assert "Streams synced normally: (none)" in caplog.text
+    assert "reported as succeeded" not in caplog.text
+
+
+def test_job_still_fails_when_apple_rejects_a_vendor(no_sleep, caplog):
+    fake = FakeAppleFinance(detail_payload=_file(ROWS, SUMMARY))
+    fake.rejected = {"BADKEY"}
+
+    with caplog.at_level(logging.WARNING, logger="airbyte"):
+        messages, error = _read_with(fake, "summary_sales", "financial_report_detail", vendors=(BAD, GOOD))
+
+    # FakeAppleFinance chi tu choi vendor o summary_sales; financial_report_detail van chay xong.
+    assert error is not None                                   # vendor bi tu choi -> failed nhu cu
+    assert [r["_vendor_id_"] for r in _records(messages, "summary_sales")] == ["222"]
+    assert _statuses(messages, "financial_report_detail")[-1] == "COMPLETE"
+    assert len(_error_traces(messages)) == 1
+    assert "Apple rejected 1 of 2 vendor(s)" in _error_traces(messages)[0]
+    assert "reported as succeeded" not in caplog.text
 
 
 def test_all_streams_healthy_gives_no_warning(no_sleep, caplog):

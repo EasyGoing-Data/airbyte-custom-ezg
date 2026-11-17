@@ -17,6 +17,7 @@ from airbyte_cdk.utils.traced_exception import AirbyteTracedException
 
 from .client import AppStoreAuthError, AppStoreClient
 from .streams import (
+    VENDOR_REJECTED_MARKER,
     AppInstallationsStream,
     AppSessionsStream,
     FinancialReportDetailStream,
@@ -60,15 +61,21 @@ class SourceAppleAppStore(AbstractSource):
     def read(self, logger: logging.Logger, config: Mapping[str, Any], catalog: Any, state: Any = None) -> Iterator[AirbyteMessage]:
         """Chay moi stream; stream nao loi thi ghi CANH BAO neu ro ten, cac stream khac van chay het.
 
-        Job van ket thuc `failed` neu co stream loi (CDK nem loi tong sau khi da chay xong
-        cac stream con lai) de loi khong bi im lang; du lieu va state cua stream chay tot da duoc phat ra.
+        Ket qua cua job khi co stream loi:
+          - Co it nhat 1 stream chay xong va loi KHONG phai do Apple tu choi vendor
+            -> job `succeeded`, loi chi nam trong log dang WARNING (khong phat error trace,
+               khong nem loi tong cua CDK). Stream loi van mang trang thai INCOMPLETE.
+          - Apple tu choi vendor (401 / 403) -> job `failed` nhu cu.
+          - Khong stream nao chay xong -> job `failed`.
         """
         finished: Dict[str, str] = {}
+        held_errors: List[AirbyteMessage] = []     # error trace cua stream loi thuong, chua phat
+        vendor_rejected = False
         try:
             for message in super().read(logger, config, catalog, state):
-                if (message.type == MessageType.TRACE and message.trace
-                        and message.trace.type == TraceType.STREAM_STATUS and message.trace.stream_status):
-                    status = message.trace.stream_status
+                trace = message.trace if message.type == MessageType.TRACE else None
+                if trace and trace.type == TraceType.STREAM_STATUS and trace.stream_status:
+                    status = trace.stream_status
                     if status.status in (AirbyteStreamStatus.COMPLETE, AirbyteStreamStatus.INCOMPLETE):
                         finished[status.stream_descriptor.name] = status.status.value
                         if status.status == AirbyteStreamStatus.INCOMPLETE:
@@ -76,15 +83,32 @@ class SourceAppleAppStore(AbstractSource):
                                 f"WARNING stream '{status.stream_descriptor.name}' failed; "
                                 f"continuing with the remaining streams."
                             )
+                elif trace and trace.type == TraceType.ERROR and trace.error:
+                    if VENDOR_REJECTED_MARKER in (trace.error.message or ""):
+                        vendor_rejected = True
+                    else:
+                        held_errors.append(message)     # quyet dinh phat hay khong o cuoi luot
+                        continue
                 yield message
         except AirbyteTracedException:
             failed = sorted(name for name, status in finished.items() if status == AirbyteStreamStatus.INCOMPLETE.value)
             ok     = sorted(name for name, status in finished.items() if status == AirbyteStreamStatus.COMPLETE.value)
-            logger.warning(
+            summary = (
                 f"WARNING sync finished with failed stream(s): {', '.join(failed) or '(unknown)'}. "
                 f"Streams synced normally: {', '.join(ok) or '(none)'}."
             )
-            raise
+            if vendor_rejected or not ok:
+                yield from held_errors
+                logger.warning(summary)
+                raise
+            for held in held_errors:
+                descriptor = held.trace.error.stream_descriptor
+                # internal_message mang loi goc (vd "500 Client Error ..."); message la cau chung cua CDK
+                reason = held.trace.error.internal_message or held.trace.error.message
+                logger.warning(
+                    f"WARNING stream '{descriptor.name if descriptor else '?'}' error: {reason}"
+                )
+            logger.warning(f"{summary} Job is reported as succeeded; check the warnings above.")
 
     def _discover_apps_by_vendor(
         self, vendors: List[Dict]
