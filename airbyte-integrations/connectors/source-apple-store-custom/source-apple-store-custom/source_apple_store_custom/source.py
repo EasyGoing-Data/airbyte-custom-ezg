@@ -7,10 +7,13 @@ streams(): returns stream instances with per-vendor lazy clients and
 """
 
 import logging
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
+from airbyte_cdk.models import AirbyteMessage, AirbyteStreamStatus, Type as MessageType
+from airbyte_cdk.models import TraceType
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
+from airbyte_cdk.utils.traced_exception import AirbyteTracedException
 
 from .client import AppStoreAuthError, AppStoreClient
 from .streams import (
@@ -48,6 +51,40 @@ def _to_bool(value: Any, default: bool = False) -> bool:
 
 
 class SourceAppleAppStore(AbstractSource):
+
+    @property
+    def stop_sync_on_stream_failure(self) -> bool:
+        """1 stream loi KHONG dung cac stream con lai (ghim ro, khong phu thuoc mac dinh cua CDK)."""
+        return False
+
+    def read(self, logger: logging.Logger, config: Mapping[str, Any], catalog: Any, state: Any = None) -> Iterator[AirbyteMessage]:
+        """Chay moi stream; stream nao loi thi ghi CANH BAO neu ro ten, cac stream khac van chay het.
+
+        Job van ket thuc `failed` neu co stream loi (CDK nem loi tong sau khi da chay xong
+        cac stream con lai) de loi khong bi im lang; du lieu va state cua stream chay tot da duoc phat ra.
+        """
+        finished: Dict[str, str] = {}
+        try:
+            for message in super().read(logger, config, catalog, state):
+                if (message.type == MessageType.TRACE and message.trace
+                        and message.trace.type == TraceType.STREAM_STATUS and message.trace.stream_status):
+                    status = message.trace.stream_status
+                    if status.status in (AirbyteStreamStatus.COMPLETE, AirbyteStreamStatus.INCOMPLETE):
+                        finished[status.stream_descriptor.name] = status.status.value
+                        if status.status == AirbyteStreamStatus.INCOMPLETE:
+                            logger.warning(
+                                f"WARNING stream '{status.stream_descriptor.name}' failed; "
+                                f"continuing with the remaining streams."
+                            )
+                yield message
+        except AirbyteTracedException:
+            failed = sorted(name for name, status in finished.items() if status == AirbyteStreamStatus.INCOMPLETE.value)
+            ok     = sorted(name for name, status in finished.items() if status == AirbyteStreamStatus.COMPLETE.value)
+            logger.warning(
+                f"WARNING sync finished with failed stream(s): {', '.join(failed) or '(unknown)'}. "
+                f"Streams synced normally: {', '.join(ok) or '(none)'}."
+            )
+            raise
 
     def _discover_apps_by_vendor(
         self, vendors: List[Dict]

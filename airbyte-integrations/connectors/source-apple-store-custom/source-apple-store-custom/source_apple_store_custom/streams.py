@@ -27,7 +27,7 @@ from airbyte_cdk.sources.streams import IncrementalMixin, Stream
 from airbyte_cdk.utils.traced_exception import AirbyteTracedException
 
 from .client import AppStoreAuthError, AppStoreClient
-from .finance_detail_parser import parse_finance_detail
+from .finance_detail_parser import parse_finance_detail, parse_summary_section, summary_mismatches
 
 logger = logging.getLogger("airbyte")
 
@@ -589,6 +589,27 @@ class FinancialReportDetailStream(FinancialReportStream):
         META_ROW_NUMBER,                           # _row_number_ — chot cuoi chong undercount
     ]
 
+    @staticmethod
+    def _warn_if_rows_differ_from_file_summary(content: bytes, rows: list, vendor_id: str, year_month: str) -> None:
+        """Doi soat rows voi bang summary theo country o cuoi chinh file Apple.
+
+        Lech -> ghi WARNING (khong lam hong sync): day la dau hieu file bi doc thieu,
+        nhu loi dung som tai dong trong Transaction Date o cac ban truoc 0.9.4.
+        """
+        try:
+            problems = summary_mismatches(rows, parse_summary_section(content))
+        except Exception as exc:                      # doi soat khong duoc lam hong sync
+            logger.warning(f"[financial_report_detail] vendor={vendor_id} month={year_month}: summary check skipped ({exc})")
+            return
+        if not problems:
+            return
+        logger.warning(
+            f"[financial_report_detail] vendor={vendor_id} month={year_month}: parsed rows do NOT match "
+            f"the file's own country summary in {len(problems)} group(s) — data may be incomplete."
+        )
+        for problem in problems[:10]:
+            logger.warning(f"[financial_report_detail]   {problem}")
+
     def read_records(
         self,
         stream_slice: Mapping[str, Any],
@@ -612,6 +633,7 @@ class FinancialReportDetailStream(FinancialReportStream):
                     f"[financial_report_detail] vendor={vendor_id} month={year_month}: "
                     f"{len(rows)} rows (period {preamble.get('Start Date')} → {preamble.get('End Date')})"
                 )
+                self._warn_if_rows_differ_from_file_summary(content, rows, vendor_id, year_month)
 
                 source_ref = (
                     f"financeReports?reportType=FINANCE_DETAIL&regionCode=Z1"
