@@ -7,13 +7,17 @@ streams(): returns stream instances with per-vendor lazy clients and
 """
 
 import logging
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 
+from airbyte_cdk.models import AirbyteMessage, AirbyteStreamStatus, Type as MessageType
+from airbyte_cdk.models import TraceType
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
+from airbyte_cdk.utils.traced_exception import AirbyteTracedException
 
-from .client import AppStoreClient
+from .client import AppStoreAuthError, AppStoreClient
 from .streams import (
+    VENDOR_REJECTED_MARKER,
     AppInstallationsStream,
     AppSessionsStream,
     FinancialReportDetailStream,
@@ -48,6 +52,63 @@ def _to_bool(value: Any, default: bool = False) -> bool:
 
 
 class SourceAppleAppStore(AbstractSource):
+
+    @property
+    def stop_sync_on_stream_failure(self) -> bool:
+        """1 stream loi KHONG dung cac stream con lai (ghim ro, khong phu thuoc mac dinh cua CDK)."""
+        return False
+
+    def read(self, logger: logging.Logger, config: Mapping[str, Any], catalog: Any, state: Any = None) -> Iterator[AirbyteMessage]:
+        """Chay moi stream; stream nao loi thi ghi CANH BAO neu ro ten, cac stream khac van chay het.
+
+        Ket qua cua job khi co stream loi:
+          - Co it nhat 1 stream chay xong va loi KHONG phai do Apple tu choi vendor
+            -> job `succeeded`, loi chi nam trong log dang WARNING (khong phat error trace,
+               khong nem loi tong cua CDK). Stream loi van mang trang thai INCOMPLETE.
+          - Apple tu choi vendor (401 / 403) -> job `failed` nhu cu.
+          - Khong stream nao chay xong -> job `failed`.
+        """
+        finished: Dict[str, str] = {}
+        held_errors: List[AirbyteMessage] = []     # error trace cua stream loi thuong, chua phat
+        vendor_rejected = False
+        try:
+            for message in super().read(logger, config, catalog, state):
+                trace = message.trace if message.type == MessageType.TRACE else None
+                if trace and trace.type == TraceType.STREAM_STATUS and trace.stream_status:
+                    status = trace.stream_status
+                    if status.status in (AirbyteStreamStatus.COMPLETE, AirbyteStreamStatus.INCOMPLETE):
+                        finished[status.stream_descriptor.name] = status.status.value
+                        if status.status == AirbyteStreamStatus.INCOMPLETE:
+                            logger.warning(
+                                f"WARNING stream '{status.stream_descriptor.name}' failed; "
+                                f"continuing with the remaining streams."
+                            )
+                elif trace and trace.type == TraceType.ERROR and trace.error:
+                    if VENDOR_REJECTED_MARKER in (trace.error.message or ""):
+                        vendor_rejected = True
+                    else:
+                        held_errors.append(message)     # quyet dinh phat hay khong o cuoi luot
+                        continue
+                yield message
+        except AirbyteTracedException:
+            failed = sorted(name for name, status in finished.items() if status == AirbyteStreamStatus.INCOMPLETE.value)
+            ok     = sorted(name for name, status in finished.items() if status == AirbyteStreamStatus.COMPLETE.value)
+            summary = (
+                f"WARNING sync finished with failed stream(s): {', '.join(failed) or '(unknown)'}. "
+                f"Streams synced normally: {', '.join(ok) or '(none)'}."
+            )
+            if vendor_rejected or not ok:
+                yield from held_errors
+                logger.warning(summary)
+                raise
+            for held in held_errors:
+                descriptor = held.trace.error.stream_descriptor
+                # internal_message mang loi goc (vd "500 Client Error ..."); message la cau chung cua CDK
+                reason = held.trace.error.internal_message or held.trace.error.message
+                logger.warning(
+                    f"WARNING stream '{descriptor.name if descriptor else '?'}' error: {reason}"
+                )
+            logger.warning(f"{summary} Job is reported as succeeded; check the warnings above.")
 
     def _discover_apps_by_vendor(
         self, vendors: List[Dict]
@@ -92,10 +153,22 @@ class SourceAppleAppStore(AbstractSource):
         """
         Validate credentials for every vendor by listing its apps.
         Each vendor uses its own key_id / issuer_id / private_key.
+
+        Moi vendor deu duoc thu (khong dung o vendor dau tien loi).
+        - Vendor bi Apple tu choi (401 / 403, AppStoreAuthError): ghi log, thu tiep
+          vendor sau. Neu con it nhat 1 vendor goi duoc thi check PASS, de sync
+          van chay cho cac tai khoan lanh; sync se bo qua vendor loi roi ket thuc
+          o trang thai failed va neu ten vendor do (xem streams.py).
+        - Moi vendor deu bi tu choi: check FAIL, liet ke tung vendor.
+        - Loi khac (thieu truong cau hinh, khoa sai dinh dang, loi mang...): check
+          FAIL ngay nhu truoc.
         """
         vendors = config.get("vendors", [])
         if not vendors:
             return False, "No vendors configured. Add at least one vendor."
+
+        ok_count = 0
+        rejected: List[str] = []
 
         for vendor in vendors:
             vid   = vendor.get("vendor_id", "?")
@@ -108,10 +181,25 @@ class SourceAppleAppStore(AbstractSource):
                 )
                 apps = client.list_apps()
                 logger.info(f"Vendor '{vname}' ({vid}) OK — found {len(apps)} app(s).")
+                ok_count += 1
             except KeyError as exc:
                 return False, f"Vendor '{vname}' is missing required field: {exc}"
+            except AppStoreAuthError as exc:
+                message = f"Vendor '{vname}' ({vid}) failed: {exc}"
+                logger.error(message)
+                rejected.append(message)
             except Exception as exc:
                 return False, f"Vendor '{vname}' ({vid}) failed: {exc}"
+
+        if ok_count == 0:
+            return False, " || ".join(rejected)
+
+        if rejected:
+            logger.warning(
+                f"{len(rejected)}/{len(vendors)} vendor(s) rejected by Apple. Check passes so the "
+                f"other {ok_count} vendor(s) keep syncing; the sync will skip the rejected "
+                f"vendor(s) and end as failed until Apple access is restored."
+            )
 
         return True, None
 

@@ -25,6 +25,52 @@ THROTTLE_AT       = 0.10         # slow down when < 10% quota remains
 CRITICAL_AT       = 50           # hard sleep when < 50 requests remain
 MAX_RETRIES       = 5
 BACKOFF_BASE      = 2            # exponential backoff base (seconds)
+NO_RETRY_STATUSES = (401, 403)   # auth / permission: thu lai khong giai quyet duoc gi
+ERROR_SUMMARY_MAX = 500          # gioi han do dai phan loi Apple ghi vao log
+
+
+class AppStoreAuthError(Exception):
+    """
+    Apple tu choi khoa API hoac quyen cua tai khoan (HTTP 401 / 403).
+
+    Raise ngay, KHONG retry. Co y khong ke thua requests.RequestException de
+    vong retry trong _get/_post khong nuot mat. Noi goi bat rieng theo tung
+    vendor, de 1 tai khoan hong khong chan cac tai khoan con lai.
+    """
+
+    def __init__(self, status_code: int, url: str, detail: str):
+        self.status_code = status_code
+        self.url         = url
+        self.detail      = detail
+        super().__init__(f"{status_code} from Apple for {url}: {detail}")
+
+
+def _apple_error_summary(resp: requests.Response) -> str:
+    """
+    Tom tat body loi cua Apple de ghi log: errors[].code / title / detail.
+    Body loi cua Apple khong chua khoa hay token, nhung van cat ngan cho gon.
+    Vi du code: FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED, NOT_AUTHORIZED.
+    """
+    try:
+        errors = resp.json().get("errors") or []
+        parts = [
+            "; ".join(
+                f"{key}={err[key]}" for key in ("code", "title", "detail") if err.get(key)
+            )
+            for err in errors[:3]
+            if isinstance(err, dict)
+        ]
+        summary = " | ".join(p for p in parts if p)
+    except Exception:
+        summary = ""
+    if not summary:
+        summary = " ".join((resp.text or "").split()) or "(empty body)"
+    return summary[:ERROR_SUMMARY_MAX]
+
+
+def _url_path(url: str) -> str:
+    """URL khong kem query string, dung cho thong bao loi."""
+    return url.split("?", 1)[0]
 
 
 class AppStoreClient:
@@ -91,6 +137,22 @@ class AppStoreClient:
 
     # ─── HTTP helpers ─────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _raise_or_log_error(resp: requests.Response, url: str) -> None:
+        """
+        Goi khi response khong phai ma thanh cong / ma da xu ly rieng.
+        - 401 / 403: ghi ma loi cua Apple roi raise AppStoreAuthError (khong retry).
+        - 4xx / 5xx khac: ghi ma loi cua Apple; noi goi tu raise_for_status() va retry nhu cu.
+        """
+        if resp.status_code < 400:
+            return
+        summary = _apple_error_summary(resp)
+        path    = _url_path(url)
+        if resp.status_code in NO_RETRY_STATUSES:
+            logger.error(f"Apple API {resp.status_code} for {path}: {summary} (no retry)")
+            raise AppStoreAuthError(resp.status_code, path, summary)
+        logger.warning(f"Apple API {resp.status_code} for {path}: {summary}")
+
     def _get(
         self,
         url: str,
@@ -118,6 +180,7 @@ class AppStoreClient:
                     logger.warning(f"429 RATE_LIMIT_EXCEEDED. Waiting {wait}s (attempt {attempt+1}).")
                     time.sleep(wait)
                     continue
+                self._raise_or_log_error(resp, url)
                 resp.raise_for_status()
 
             except requests.exceptions.RequestException as exc:
@@ -148,6 +211,7 @@ class AppStoreClient:
                     logger.warning(f"429 RATE_LIMIT_EXCEEDED on POST. Waiting {wait}s.")
                     time.sleep(wait)
                     continue
+                self._raise_or_log_error(resp, url)
                 resp.raise_for_status()
 
             except requests.exceptions.RequestException as exc:

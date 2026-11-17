@@ -22,10 +22,12 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional
 
 import pytz
+from airbyte_cdk.models import FailureType
 from airbyte_cdk.sources.streams import IncrementalMixin, Stream
+from airbyte_cdk.utils.traced_exception import AirbyteTracedException
 
-from .client import AppStoreClient
-from .finance_detail_parser import parse_finance_detail
+from .client import AppStoreAuthError, AppStoreClient
+from .finance_detail_parser import parse_finance_detail, parse_summary_section, summary_mismatches
 
 logger = logging.getLogger("airbyte")
 
@@ -49,6 +51,11 @@ META_SOURCE_REF   = _normalize("source_ref")     # _source_ref_
 
 
 # ─── Base Stream ──────────────────────────────────────────────────────────────
+
+# Co trong thong bao loi khi Apple tu choi vendor (401 / 403). source.read() dua vao day
+# de giu job `failed` cho truong hop nay (khac voi loi stream thong thuong).
+VENDOR_REJECTED_MARKER = "Apple rejected"
+
 
 class BaseAppStoreStream(Stream, IncrementalMixin, ABC):
     """
@@ -81,6 +88,8 @@ class BaseAppStoreStream(Stream, IncrementalMixin, ABC):
         # Lazy clients, one per vendor_id (§3.1)
         self._clients: Dict[str, AppStoreClient] = {}
         self._state: MutableMapping[str, Any] = {}
+        # Vendor bi Apple tu choi (401 / 403) trong lan doc nay: {vendor_id: mo ta loi}
+        self._rejected_vendors: Dict[str, str] = {}
 
     # ── Lazy client per vendor ────────────────────────────────────────────────
 
@@ -170,6 +179,56 @@ class BaseAppStoreStream(Stream, IncrementalMixin, ABC):
         if not current or new_iso > current:
             self._state.setdefault(slice_key, {})[self.cursor_field] = new_iso
 
+    # ── Co lap loi theo vendor ────────────────────────────────────────────────
+    #
+    # 1 tai khoan Apple bi tu choi (401 / 403) khong duoc chan cac tai khoan con
+    # lai. Cach lam cho cac stream chia slice theo vendor:
+    #   1. read_records() bat AppStoreAuthError cua vendor do, ghi lai, dung slice.
+    #      Cursor cua vendor loi giu nguyen (state theo tung vendor_id), nen khi
+    #      Apple thong lai thi lan sync sau tu doc bu tu cursor - lookback_days.
+    #   2. Sau slice cuoi, _vendor_slices() raise AirbyteTracedException neu co
+    #      vendor bi bo qua. CDK da phat state sau tung slice truoc do, nen du lieu
+    #      va cursor cua vendor lanh van duoc giu; stream ket thuc INCOMPLETE va
+    #      job ket thuc failed, neu ro ten vendor (khong im lang thieu du lieu).
+
+    def _vendor_slices(self) -> Iterable[Mapping[str, Any]]:
+        """Moi vendor 1 slice; het slice thi bao loi neu co vendor bi Apple tu choi."""
+        self._rejected_vendors = {}
+        for vendor in self._vendors:
+            yield {"vendor": vendor}
+        self._raise_if_vendors_rejected()
+
+    def _skip_rejected_vendor(self, vendor: Dict, exc: AppStoreAuthError) -> None:
+        vendor_id   = vendor["vendor_id"]
+        vendor_name = vendor.get("vendor_name", vendor_id)
+        description = f"'{vendor_name}' ({vendor_id}): {exc}"
+        self._rejected_vendors[vendor_id] = description
+        logger.error(
+            f"[{self.name}] Apple rejected vendor {description} "
+            f"-- skipping this vendor; the other vendors continue."
+        )
+
+    def _raise_if_vendors_rejected(self) -> None:
+        if not self._rejected_vendors:
+            return
+        rejected = len(self._rejected_vendors)
+        total    = len(self._vendors)
+        details  = " || ".join(self._rejected_vendors.values())
+        synced   = (
+            f"The other {total - rejected} vendor(s) were synced."
+            if rejected < total else "No vendor was synced."
+        )
+        message = (
+            f"Stream {self.name}: {VENDOR_REJECTED_MARKER} {rejected} of {total} vendor(s): "
+            f"{details} -- {synced} Fix access for the rejected vendor(s) in App Store "
+            f"Connect; the next sync backfills them automatically."
+        )
+        raise AirbyteTracedException(
+            message=message,
+            internal_message=message,
+            failure_type=FailureType.config_error,
+        )
+
 
 # ─── Summary Sales Stream ─────────────────────────────────────────────────────
 
@@ -197,8 +256,7 @@ class SummarySalesStream(BaseAppStoreStream):
     ]
 
     def stream_slices(self, **kwargs) -> Iterable[Mapping[str, Any]]:
-        for vendor in self._vendors:
-            yield {"vendor": vendor}
+        yield from self._vendor_slices()
 
     def read_records(
         self,
@@ -209,22 +267,25 @@ class SummarySalesStream(BaseAppStoreStream):
         vendor_id = vendor["vendor_id"]
         client    = self._client_for(vendor)
 
-        for day in self._date_range(slice_key=vendor_id):
-            date_str = day.strftime("%Y-%m-%d")
-            logger.info(f"[summary_sales] vendor={vendor_id} date={date_str}")
+        try:
+            for day in self._date_range(slice_key=vendor_id):
+                date_str = day.strftime("%Y-%m-%d")
+                logger.info(f"[summary_sales] vendor={vendor_id} date={date_str}")
 
-            content = client.fetch_sales_report(vendor_id, date_str)
-            if not content:
-                logger.debug(f"No data for vendor={vendor_id} date={date_str}")
-                continue
+                content = client.fetch_sales_report(vendor_id, date_str)
+                if not content:
+                    logger.debug(f"No data for vendor={vendor_id} date={date_str}")
+                    continue
 
-            for raw in client.parse_gzip_tsv(content):
-                record = self._inject_metadata(raw, vendor)
-                # Update state cursor
-                cursor_val = record.get(self.cursor_field)
-                if cursor_val:
-                    self._update_state(vendor_id, cursor_val)
-                yield record
+                for raw in client.parse_gzip_tsv(content):
+                    record = self._inject_metadata(raw, vendor)
+                    # Update state cursor
+                    cursor_val = record.get(self.cursor_field)
+                    if cursor_val:
+                        self._update_state(vendor_id, cursor_val)
+                    yield record
+        except AppStoreAuthError as exc:
+            self._skip_rejected_vendor(vendor, exc)
 
     def get_updated_state(
         self,
@@ -297,8 +358,7 @@ class FinancialReportStream(BaseAppStoreStream):
             current = self._add_months(current, 1)
 
     def stream_slices(self, **kwargs) -> Iterable[Mapping[str, Any]]:
-        for vendor in self._vendors:
-            yield {"vendor": vendor}
+        yield from self._vendor_slices()
 
     def read_records(
         self,
@@ -309,20 +369,23 @@ class FinancialReportStream(BaseAppStoreStream):
         vendor_id = vendor["vendor_id"]
         client    = self._client_for(vendor)
 
-        for year_month in self._month_range(vendor_id):
-            logger.info(f"[financial_report] vendor={vendor_id} month={year_month}")
+        try:
+            for year_month in self._month_range(vendor_id):
+                logger.info(f"[financial_report] vendor={vendor_id} month={year_month}")
 
-            content = client.fetch_finance_report(vendor_id, year_month)
-            if not content:
-                logger.debug(f"No financial data for vendor={vendor_id} month={year_month}")
-                continue
+                content = client.fetch_finance_report(vendor_id, year_month)
+                if not content:
+                    logger.debug(f"No financial data for vendor={vendor_id} month={year_month}")
+                    continue
 
-            for raw in client.parse_gzip_tsv(content):
-                record = self._inject_metadata(raw, vendor)
-                cursor_val = record.get(self.cursor_field)
-                if cursor_val:
-                    self._update_state(vendor_id, cursor_val)
-                yield record
+                for raw in client.parse_gzip_tsv(content):
+                    record = self._inject_metadata(raw, vendor)
+                    cursor_val = record.get(self.cursor_field)
+                    if cursor_val:
+                        self._update_state(vendor_id, cursor_val)
+                    yield record
+        except AppStoreAuthError as exc:
+            self._skip_rejected_vendor(vendor, exc)
 
     def get_updated_state(
         self,
@@ -531,6 +594,27 @@ class FinancialReportDetailStream(FinancialReportStream):
         META_ROW_NUMBER,                           # _row_number_ — chot cuoi chong undercount
     ]
 
+    @staticmethod
+    def _warn_if_rows_differ_from_file_summary(content: bytes, rows: list, vendor_id: str, year_month: str) -> None:
+        """Doi soat rows voi bang summary theo country o cuoi chinh file Apple.
+
+        Lech -> ghi WARNING (khong lam hong sync): day la dau hieu file bi doc thieu,
+        nhu loi dung som tai dong trong Transaction Date o cac ban truoc 0.9.4.
+        """
+        try:
+            problems = summary_mismatches(rows, parse_summary_section(content))
+        except Exception as exc:                      # doi soat khong duoc lam hong sync
+            logger.warning(f"[financial_report_detail] vendor={vendor_id} month={year_month}: summary check skipped ({exc})")
+            return
+        if not problems:
+            return
+        logger.warning(
+            f"[financial_report_detail] vendor={vendor_id} month={year_month}: parsed rows do NOT match "
+            f"the file's own country summary in {len(problems)} group(s) — data may be incomplete."
+        )
+        for problem in problems[:10]:
+            logger.warning(f"[financial_report_detail]   {problem}")
+
     def read_records(
         self,
         stream_slice: Mapping[str, Any],
@@ -540,34 +624,38 @@ class FinancialReportDetailStream(FinancialReportStream):
         vendor_id = vendor["vendor_id"]
         client    = self._client_for(vendor)
 
-        for year_month in self._month_range(vendor_id):
-            logger.info(f"[financial_report_detail] vendor={vendor_id} month={year_month}")
+        try:
+            for year_month in self._month_range(vendor_id):
+                logger.info(f"[financial_report_detail] vendor={vendor_id} month={year_month}")
 
-            content = client.fetch_finance_detail_report(vendor_id, year_month)
-            if not content:
-                logger.debug(f"No finance detail for vendor={vendor_id} month={year_month}")
-                continue
+                content = client.fetch_finance_detail_report(vendor_id, year_month)
+                if not content:
+                    logger.debug(f"No finance detail for vendor={vendor_id} month={year_month}")
+                    continue
 
-            preamble, _header, rows = parse_finance_detail(content)
-            logger.info(
-                f"[financial_report_detail] vendor={vendor_id} month={year_month}: "
-                f"{len(rows)} rows (period {preamble.get('Start Date')} → {preamble.get('End Date')})"
-            )
+                preamble, _header, rows = parse_finance_detail(content)
+                logger.info(
+                    f"[financial_report_detail] vendor={vendor_id} month={year_month}: "
+                    f"{len(rows)} rows (period {preamble.get('Start Date')} → {preamble.get('End Date')})"
+                )
+                self._warn_if_rows_differ_from_file_summary(content, rows, vendor_id, year_month)
 
-            source_ref = (
-                f"financeReports?reportType=FINANCE_DETAIL&regionCode=Z1"
-                f"&reportDate={year_month}&vendorNumber={vendor_id}"
-            )
+                source_ref = (
+                    f"financeReports?reportType=FINANCE_DETAIL&regionCode=Z1"
+                    f"&reportDate={year_month}&vendorNumber={vendor_id}"
+                )
 
-            for row_number, raw in enumerate(rows, start=1):
-                record = self._inject_metadata(raw, vendor)
-                record[META_REPORT_MONTH] = year_month
-                record[META_ROW_NUMBER]   = row_number
-                record[META_SOURCE_REF]   = source_ref
-                # Start Date / End Date nam o preamble cua file, khong phai cot data.
-                # Giu nguyen ten goc de dong bo voi financial_report.
-                record[_normalize("Start Date")] = preamble.get("Start Date")
-                record[_normalize("End Date")]   = preamble.get("End Date")
+                for row_number, raw in enumerate(rows, start=1):
+                    record = self._inject_metadata(raw, vendor)
+                    record[META_REPORT_MONTH] = year_month
+                    record[META_ROW_NUMBER]   = row_number
+                    record[META_SOURCE_REF]   = source_ref
+                    # Start Date / End Date nam o preamble cua file, khong phai cot data.
+                    # Giu nguyen ten goc de dong bo voi financial_report.
+                    record[_normalize("Start Date")] = preamble.get("Start Date")
+                    record[_normalize("End Date")]   = preamble.get("End Date")
 
-                self._update_state(vendor_id, year_month)
-                yield record
+                    self._update_state(vendor_id, year_month)
+                    yield record
+        except AppStoreAuthError as exc:
+            self._skip_rejected_vendor(vendor, exc)
