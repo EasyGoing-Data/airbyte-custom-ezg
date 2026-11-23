@@ -27,6 +27,9 @@ dagger_engine_logs*
 secrets/config.json
 updated_configurations
 !airbyte-integrations/connector-templates/**/secrets
+# EZG custom connectors (repo PUBLIC): moi file trong secrets/ bi bo qua, chi giu test_config.json (gia tri mau)
+airbyte-integrations/connectors/*-custom/**/secrets/*
+!airbyte-integrations/connectors/*-custom/**/secrets/test_config.json
 
 # Connector debug configs
 airbyte-integrations/connectors/**/src/test/resources/debug_resources
