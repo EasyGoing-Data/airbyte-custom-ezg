@@ -1,4 +1,6 @@
-# source-unity-ads-custom
+# ezg-source-unity-ads-custom
+
+> Thư mục: `airbyte-integrations/connectors/ezg-source-unity-ads-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-unity-ads-custom`.
 
 Custom Airbyte source: Unity Ads Monetization Stats API -> BigQuery (doanh thu quang cao lay truc tiep tu Unity, de doi soat voi so uoc tinh cua AppLovin MAX).
 Stream: `unity_ads_monetization` (incremental, cursor `date`, multi-account).

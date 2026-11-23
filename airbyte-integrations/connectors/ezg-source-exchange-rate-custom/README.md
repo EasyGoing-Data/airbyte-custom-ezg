@@ -1,4 +1,6 @@
-# source-exchange-rate-custom
+# ezg-source-exchange-rate-custom
+
+> Thư mục: `airbyte-integrations/connectors/ezg-source-exchange-rate-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-exchange-rate-custom`.
 
 Airbyte custom source connector for [Open Exchange Rates](https://openexchangerates.org) — pulls daily forex rates (base USD, ~170 currencies including VND) into BigQuery. Replaces the Frankfurter source.
 
@@ -31,8 +33,8 @@ Airbyte custom source connector for [Open Exchange Rates](https://openexchangera
 
 ```bash
 # local discover test (fake credentials)
-poetry run python connectors/source-exchange-rate-custom/source_exchange_rate_custom/main.py \
-  discover --config connectors/source-exchange-rate-custom/secrets/test_config.json
+poetry run python connectors/ezg-source-exchange-rate-custom/source_exchange_rate_custom/main.py \
+  discover --config connectors/ezg-source-exchange-rate-custom/secrets/test_config.json
 
 # Docker build (trên VM)
 docker build -t dataezg/source-exchange-rate-custom:0.1.0 .

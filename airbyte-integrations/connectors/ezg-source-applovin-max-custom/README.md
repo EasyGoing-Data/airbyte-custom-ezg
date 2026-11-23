@@ -1,4 +1,6 @@
-# source-applovin-max
+# ezg-source-applovin-max-custom
+
+> Thư mục: `airbyte-integrations/connectors/ezg-source-applovin-max-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-applovin-max`.
 
 Custom Airbyte source: AppLovin MAX User-Level Ad Revenue API -> BigQuery.
 Stream: `User_Level_Ad_Impression_Report` (incremental, cursor `date`).

@@ -1,4 +1,6 @@
-# source-liftoff-custom
+# ezg-source-liftoff-custom
+
+> Thư mục: `airbyte-integrations/connectors/ezg-source-liftoff-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-liftoff-custom`.
 
 Custom Airbyte source: Liftoff Monetize (Vungle) Publisher Reporting API 2.0 -> BigQuery (doanh thu quang cao lay truc tiep tu Liftoff / Vungle, de doi soat voi so uoc tinh cua AppLovin MAX — ad source `VUNGLE_BIDDING`).
 Stream: `liftoff_report` (incremental, cursor `date`, multi-account).
