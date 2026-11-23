@@ -1,4 +1,6 @@
-# source-meta-audience-network-custom
+# ezg-source-meta-audience-network-custom
+
+> Thư mục: `airbyte-integrations/connectors/ezg-source-meta-audience-network-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-meta-audience-network-custom`.
 
 Custom Airbyte source: Meta Audience Network Reporting API v2 -> BigQuery (doanh thu quang cao lay truc tiep tu Meta Audience Network, de doi soat voi so uoc tinh cua AppLovin MAX — ad source `FACEBOOK_NETWORK`).
 Streams (incremental, cursor `date`, multi-account):

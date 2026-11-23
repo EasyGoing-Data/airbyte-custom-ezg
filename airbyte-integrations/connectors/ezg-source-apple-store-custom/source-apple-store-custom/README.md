@@ -1,5 +1,7 @@
 # source-apple-store-custom
 
+> Thư mục: `airbyte-integrations/connectors/ezg-source-apple-store-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-apple-store-custom`.
+
 Airbyte custom source connector for Apple App Store Connect API.
 
 ## Streams

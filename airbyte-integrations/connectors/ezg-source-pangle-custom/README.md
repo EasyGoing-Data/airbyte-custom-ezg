@@ -1,4 +1,6 @@
-# source-pangle-custom
+# ezg-source-pangle-custom
+
+> Thư mục: `airbyte-integrations/connectors/ezg-source-pangle-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-pangle-custom`.
 
 Custom Airbyte source: Pangle Reporting API 2.0 -> BigQuery (doanh thu quang cao lay truc tiep tu Pangle, de doi soat voi so uoc tinh cua AppLovin MAX — ad source `TIKTOK_BIDDING`).
 Stream: `pangle_report` (incremental, cursor `date`, multi-account).

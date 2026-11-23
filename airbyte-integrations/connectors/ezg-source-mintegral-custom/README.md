@@ -1,4 +1,6 @@
-# source-mintegral-custom
+# ezg-source-mintegral-custom
+
+> Thư mục: `airbyte-integrations/connectors/ezg-source-mintegral-custom` (đổi tên 23/11/2026). Image Docker và connector trên Airbyte **giữ tên cũ**: `dataezg/source-mintegral-custom`.
 
 Custom Airbyte source: Mintegral Reporting API (publisher) -> BigQuery (doanh thu quang cao lay truc tiep tu Mintegral, de doi soat voi so uoc tinh cua AppLovin MAX).
 Stream: `mintegral_report` (incremental, cursor `date`, multi-account).
