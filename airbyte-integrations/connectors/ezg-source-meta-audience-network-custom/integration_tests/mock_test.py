@@ -1,10 +1,11 @@
 #
 # Test source-meta-audience-network-custom voi server gia (khong can token that, khong goi Meta).
 # Chay tu thu muc connector:  python integration_tests/mock_test.py
-# Kiem: spec, discover (2 stream), check (token dung / system user / het han), token chi nam trong header,
+# Kiem: spec, discover (3 stream co dinh), check (token dung / system user / het han), token chi nam trong header,
 #       gop dong dai -> 1 record / o ke ca khi o nam o 2 trang, ngay theo gio Pacific, revenue bi an -> revenue_omitted,
-#       stream tong, read incremental + lookback, clamp 540 ngay, clamp cursor tuong lai, retry loi tam thoi,
-#       slice rong, account loi -> state khong vuot, trung o thi dung, khong lo token.
+#       stream by_platform du doanh thu, read incremental + lookback, clamp 540 ngay, clamp cursor tuong lai,
+#       retry loi tam thoi, slice rong, account loi -> state khong vuot, trung o thi dung, khong lo token,
+#       config cu con `breakdowns` thi bo qua.
 #
 import json
 import os
@@ -18,13 +19,20 @@ from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPORT = "meta_audience_network_report"
-TOTAL = "meta_audience_network_total"
+BY_PLATFORM = "meta_audience_network_by_platform"
+BY_APP = "meta_audience_network_by_app"
+BY_APP_COUNTRY = "meta_audience_network_by_app_country"
+ALL_STREAMS = (BY_PLATFORM, BY_APP, BY_APP_COUNTRY)
 PT = ZoneInfo("America/Los_Angeles")
 TOKENS = {"fake_token_1": "100000000000001", "fake_token_2": "100000000000002"}
 TODAY = datetime.now(PT).date()
 START = TODAY - timedelta(days=20)
-CELLS = [("111_1", "US", "android"), ("111_1", "VN", "android"), ("222_2", "US", "ios")]
+# 3 o chi tiet nhat; request it chieu hon thi server gop lai: platform -> 2 o, property x platform -> 2 o
+CELLS = [
+    {"property": "111", "platform": "android", "country": "US"},
+    {"property": "111", "platform": "android", "country": "VN"},
+    {"property": "222", "platform": "ios", "country": "US"},
+]
 VALUES = {"fb_ad_network_request": "120", "fb_ad_network_filled_request": "100", "fb_ad_network_imp": "90",
           "fb_ad_network_click": "4", "fb_ad_network_revenue": "1.23456789"}
 
@@ -88,11 +96,16 @@ class Handler(BaseHTTPRequestHandler):
             d = since
             while d < until and d <= TODAY:
                 t = pt_midnight_utc(d)
-                cells = CELLS if breakdowns else [None]
+                cells = []
+                for c in CELLS:   # gop theo dung cac chieu duoc xin, giu thu tu
+                    grouped = {b: c[b] for b in breakdowns}
+                    if grouped not in cells:
+                        cells.append(grouped)
                 for cell in cells:
-                    bd = [{"key": b, "value": dict(zip(["placement", "country", "platform"], cell))[b]} for b in breakdowns] if cell else []
+                    bd = [{"key": b, "value": cell[b]} for b in breakdowns]
                     for m in metrics:
-                        if cell and cell[1] == "VN" and m == "fb_ad_network_revenue":
+                        # o nho (VN) bi an doanh thu, chi khi tach toi quoc gia
+                        if cell.get("country") == "VN" and m == "fb_ad_network_revenue":
                             items.append(("omitted_results", {"time": t, "metric": m, "breakdowns": bd}))
                         else:
                             items.append(("results", {"time": t, "metric": m, "breakdowns": bd, "value": VALUES[m]}))
@@ -180,7 +193,11 @@ def main():
     }
     cfg = write("config.json", config)
     catalog = os.path.join(ROOT, "integration_tests", "configured_catalog.json")
-    pk_report = ["account_name", "date", "placement", "country", "platform"]
+    pks = {
+        BY_PLATFORM: ["account_name", "date", "platform"],
+        BY_APP: ["account_name", "date", "property", "platform"],
+        BY_APP_COUNTRY: ["account_name", "date", "property", "platform", "country"],
+    }
 
     # spec
     proc, msgs = run(["spec"], env)
@@ -191,14 +208,15 @@ def main():
           proc.stderr[-300:])
     check("spec lookback mac dinh 14", props.get("number_days_backward", {}).get("default") == 14)
     check("spec access_token la airbyte_secret", acc.get("access_token", {}).get("airbyte_secret") is True)
+    check("spec khong con tuy chon breakdowns", "breakdowns" not in props)
 
     # discover
     proc, msgs = run(["discover", "--config", os.path.join(ROOT, "secrets", "test_config.json")], env)
     streams = {s["name"]: s for s in next((m["catalog"]["streams"] for m in msgs if m.get("type") == "CATALOG"), [])}
-    check("discover 2 stream dung ten", set(streams) == {REPORT, TOTAL}, proc.stderr[-300:])
-    if len(streams) == 2:
-        check("discover PK stream chi tiet", [p[0] for p in streams[REPORT]["source_defined_primary_key"]] == pk_report)
-        check("discover PK stream tong", [p[0] for p in streams[TOTAL]["source_defined_primary_key"]] == ["account_name", "date"])
+    check("discover 3 stream dung ten", set(streams) == set(ALL_STREAMS), proc.stderr[-300:])
+    if len(streams) == 3:
+        for name in ALL_STREAMS:
+            check(f"discover PK {name}", [p[0] for p in streams[name]["source_defined_primary_key"]] == pks[name])
         check("discover cursor date + incremental", all(s.get("default_cursor_field") == ["date"]
               and "incremental" in s.get("supported_sync_modes", []) for s in streams.values()))
 
@@ -218,19 +236,24 @@ def main():
     # read full
     state["requests"].clear()
     proc, msgs = run(["read", "--config", cfg, "--catalog", catalog], env)
-    rep, tot = records(msgs, REPORT), records(msgs, TOTAL)
-    # chi tiet: 21 ngay x 3 o x 2 account, tru 7 ngay dau cua account 2 = 126 - 21; tong: 21 + 14
-    check("read full: stream chi tiet = 105 record", len(rep) == 105, f"{len(rep)} | rc={proc.returncode} | {proc.stderr[-400:]}")
-    check("read full: stream tong = 35 record", len(tot) == 35, str(len(tot)))
-    keys = [tuple(r.get(k) for k in pk_report) for r in rep]
-    check("read full: PK unique (o nam o 2 trang van gop dung)", len(set(keys)) == len(keys)
-          and any(r["after"] for r in state["requests"]))
+    plat, app, rep = records(msgs, BY_PLATFORM), records(msgs, BY_APP), records(msgs, BY_APP_COUNTRY)
+    # 35 account-ngay (21 ngay x 2 account, tru 7 ngay dau cua account 2); by_platform 2 o, by_app 2 o, by_app_country 3 o
+    check("read full: by_app_country = 105 record", len(rep) == 105, f"{len(rep)} | rc={proc.returncode} | {proc.stderr[-400:]}")
+    check("read full: by_platform = 70, by_app = 70 record", len(plat) == 70 and len(app) == 70, f"{len(plat)} {len(app)}")
+    unique = all(len({tuple(r.get(k) for k in pks[n]) for r in rs}) == len(rs)
+                 for n, rs in ((BY_PLATFORM, plat), (BY_APP, app), (BY_APP_COUNTRY, rep)))
+    check("read full: PK unique ca 3 stream (o nam o 2 trang van gop dung)", unique and any(r["after"] for r in state["requests"]))
+    check("read full: moi stream gui dung breakdowns", {tuple(r["breakdowns"]) for r in state["requests"]} >= {
+        ("platform",), ("property", "platform"), ("property", "platform", "country")})
+    check("read full: by_platform chi co cot platform, by_app co property", all("property" not in r and "country" not in r for r in plat)
+          and all(r.get("property") in ("111", "222") and "country" not in r for r in app))
     check("read full: du 5 metric / record, ten cot bo tien to", all(
         r["request"] == 120 and r["filled_request"] == 100 and r["imp"] == 90 and r["click"] == 4 for r in rep))
     check("read full: revenue round 6 o US", all(r["revenue"] == 1.234568 and r["revenue_omitted"] is False for r in rep if r["country"] == "US"))
     check("read full: revenue bi an -> null + revenue_omitted", all(
         r["revenue"] is None and r["revenue_omitted"] is True for r in rep if r["country"] == "VN"))
-    check("read full: stream tong co revenue day du", all(r["revenue"] == 1.234568 and r["revenue_omitted"] is False for r in tot))
+    check("read full: by_platform va by_app co revenue day du", all(
+        r["revenue"] == 1.234568 and r["revenue_omitted"] is False for r in plat + app))
     dates = {r["date"] for r in rep if r["account_name"] == "meta_1"}
     check("read full: ngay theo gio Pacific, du 21 ngay", dates == {(START + timedelta(days=i)).isoformat() for i in range(21)})
     check("read full: co report_timezone + period_start_utc", all(
@@ -239,36 +262,45 @@ def main():
     check("read full: da retry loi tam thoi (code 4)", state["sent_transient"] and proc.returncode == 0)
     check("read full: token khong nam trong URL, khong di theo paging.next", not state["token_in_url"])
     st = last_states(msgs)
-    check("read full: state 2 stream = hom nay (Pacific)", st.get(REPORT) == TODAY.isoformat() and st.get(TOTAL) == TODAY.isoformat(), str(st))
+    check("read full: state 3 stream = hom nay (Pacific)", all(st.get(n) == TODAY.isoformat() for n in ALL_STREAMS), str(st))
     check("read full: khong lo token", not leaked(proc))
+
+    # config cu (tao tu v1.0.0) con truong `breakdowns` -> bo qua, van ra dung 3 stream
+    legacy = dict(config, breakdowns=["placement", "country", "platform"])
+    proc, msgs = run(["read", "--config", write("legacy.json", legacy), "--catalog", catalog], env)
+    check("config cu con breakdowns: bo qua, van 105 / 70 / 70 record", proc.returncode == 0
+          and len(records(msgs, BY_APP_COUNTRY)) == 105 and len(records(msgs, BY_PLATFORM)) == 70 and len(records(msgs, BY_APP)) == 70,
+          f"rc={proc.returncode}")
 
     # incremental
     cur = (TODAY - timedelta(days=3)).isoformat()
-    st_in = [{"type": "STREAM", "stream": {"stream_descriptor": {"name": n}, "stream_state": {"date": cur}}} for n in (REPORT, TOTAL)]
+    st_in = [{"type": "STREAM", "stream": {"stream_descriptor": {"name": n}, "stream_state": {"date": cur}}} for n in ALL_STREAMS]
     state["requests"].clear()
     proc, msgs = run(["read", "--config", cfg, "--catalog", catalog, "--state", write("state.json", st_in)], env)
     first = min(r["since"] for r in state["requests"]) if state["requests"] else None
     check("read incremental: lui 14 ngay tu cursor", first == TODAY - timedelta(days=17), str(first))
-    check("read incremental: so record = 108 + 36", len(records(msgs, REPORT)) == 108 and len(records(msgs, TOTAL)) == 36,
-          f"{len(records(msgs, REPORT))} {len(records(msgs, TOTAL))}")
+    # 36 account-ngay (18 ngay x 2 account)
+    check("read incremental: so record = 108 + 72 + 72", len(records(msgs, BY_APP_COUNTRY)) == 108
+          and len(records(msgs, BY_PLATFORM)) == 72 and len(records(msgs, BY_APP)) == 72,
+          f"{len(records(msgs, BY_APP_COUNTRY))} {len(records(msgs, BY_PLATFORM))} {len(records(msgs, BY_APP))}")
     st = last_states(msgs)
-    check("read incremental: state = hom nay", st.get(REPORT) == TODAY.isoformat() and st.get(TOTAL) == TODAY.isoformat())
+    check("read incremental: state = hom nay", all(st.get(n) == TODAY.isoformat() for n in ALL_STREAMS))
 
-    # account 2 loi tu cua so 3 -> state stream dung o t-7
+    # account 2 loi tu cua so 3 -> state stream dung o t-7 (stream dau tien trong catalog bi loi truoc)
     state["fail_biz2_from"] = TODAY - timedelta(days=6)
     proc, msgs = run(["read", "--config", cfg, "--catalog", catalog], env)
     st = last_states(msgs)
-    check("account 2 loi: sync bao loi, state stream chi tiet = t-7", errored(proc, msgs)
-          and st.get(REPORT) == (TODAY - timedelta(days=7)).isoformat(), f"rc={proc.returncode} {st}")
+    check("account 2 loi: sync bao loi, state stream dau = t-7", errored(proc, msgs)
+          and st.get(BY_PLATFORM) == (TODAY - timedelta(days=7)).isoformat(), f"rc={proc.returncode} {st}")
     check("account 2 loi: khong lo token", not leaked(proc))
     state["fail_biz2_from"] = None
 
     # cursor tuong lai
     fut = (TODAY + timedelta(days=30)).isoformat()
-    st_in = [{"type": "STREAM", "stream": {"stream_descriptor": {"name": n}, "stream_state": {"date": fut}}} for n in (REPORT, TOTAL)]
+    st_in = [{"type": "STREAM", "stream": {"stream_descriptor": {"name": n}, "stream_state": {"date": fut}}} for n in ALL_STREAMS]
     proc, msgs = run(["read", "--config", cfg, "--catalog", catalog, "--state", write("future.json", st_in)], env)
     st = last_states(msgs)
-    check("cursor tuong lai: khong crash, state = hom nay", proc.returncode == 0 and st.get(REPORT) == TODAY.isoformat(),
+    check("cursor tuong lai: khong crash, state = hom nay", proc.returncode == 0 and st.get(BY_APP_COUNTRY) == TODAY.isoformat(),
           f"rc={proc.returncode} {st}")
 
     # trung o (time, breakdowns, metric) -> dung
@@ -278,17 +310,18 @@ def main():
           f"rc={proc.returncode} recs={len(records(msgs))}")
     state["mode"] = ""
 
-    # clamp 540 ngay (chi stream tong, 1 account, trang lon cho nhanh)
+    # clamp 540 ngay (chi stream by_platform, 1 account, trang lon cho nhanh)
     old = {"accounts": config["accounts"][:1], "start_date": (TODAY - timedelta(days=700)).isoformat(), "window_days": 7}
     only_total = json.load(open(catalog))
-    only_total["streams"] = [s for s in only_total["streams"] if s["stream"]["name"] == TOTAL]
+    only_total["streams"] = [s for s in only_total["streams"] if s["stream"]["name"] == BY_PLATFORM]
     state["requests"].clear()
     state["page_size"] = 5000
     proc, msgs = run(["read", "--config", write("old.json", old), "--catalog", write("total_catalog.json", only_total)], env)
     first = min(r["since"] for r in state["requests"]) if state["requests"] else None
     check("start_date 700 ngay truoc -> clamp ve 539 ngay", first == TODAY - timedelta(days=539) and proc.returncode == 0,
           f"{first} rc={proc.returncode} {proc.stderr[-300:]}")
-    check("clamp 540 ngay: stream tong du 540 record", len(records(msgs, TOTAL)) == 540, str(len(records(msgs, TOTAL))))
+    check("clamp 540 ngay: by_platform du 540 ngay x 2 platform = 1080 record", len(records(msgs, BY_PLATFORM)) == 1080,
+          str(len(records(msgs, BY_PLATFORM))))
 
     server.shutdown()
     print(f"\n{'ALL PASS' if not failures else 'FAILED: ' + ', '.join(failures)}")

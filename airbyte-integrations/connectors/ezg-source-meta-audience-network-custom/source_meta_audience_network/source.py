@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2023 Airbyte, Inc., all rights reserved.
 #
-# source-meta-audience-network-custom v1.0.0
+# source-meta-audience-network-custom v1.1.0
 # Meta Audience Network Reporting API v2 -> BigQuery (doanh thu quang cao lay truc tiep tu Meta Audience Network).
 # Khung theo source-pubscale-custom v1.0.1 / source-applovin-max-custom v1.8.0
 # (multi-account, incremental + lookback, cursor theo tung account, khong +1, clamp <= today, guard slice None).
@@ -16,7 +16,12 @@
 #   - NGAY THEO GIO PACIFIC (PDT / PST), API khong co tham so timezone; so theo gio chi giu 72 gio
 #     -> khong doi ve UTC duoc. Record co `report_timezone` + `period_start_utc` de biet ro cua so thoi gian.
 #   - O co qua it impression: doanh thu KHONG duoc tra (nam trong `omitted_results`) -> record co `revenue_omitted` = true.
-#     Stream `meta_audience_network_total` (khong breakdown) cho tong ngay day du de doi chieu.
+#     Do tren du lieu that 26/11/2026: nguong = 100 impression / o / ngay (Meta khong cong bo); so dem luon du.
+#   - v1.1.0: 3 stream CO DINH (khong con tuy chon `breakdowns`), tach cang it chieu thi cang it doanh thu bi an:
+#       meta_audience_network_by_platform     platform                      (thay 100% doanh thu -> so chuan)
+#       meta_audience_network_by_app          property x platform           (thay ~92%)
+#       meta_audience_network_by_app_country  property x platform x country (thay ~44%, impression du 100%)
+#     Phan doanh thu bi an = so by_platform - tong phan thay duoc; phan bo o buoc dbt, khong lam trong connector.
 #   - Toi da 8 ngay / request dong bo, limit toi da 2000 dong, du lieu giu 540 ngay, 250 query / phut.
 #   - Can long-lived USER access token (Facebook Login, quyen read_audience_network_insights);
 #     token system user / token tao trong Business Manager bi API tu choi.
@@ -65,8 +70,12 @@ ALLOWED_METRICS = set(DEFAULT_METRICS) | {
 COUNT_METRICS = {"request", "filled_request", "imp", "click", "bidding_request", "bidding_response"}
 REVENUE_METRIC = "revenue"
 
-DEFAULT_BREAKDOWNS = ["placement", "country", "platform"]
-ALLOWED_BREAKDOWNS = {"ad_space", "country", "delivery_method", "placement", "placement_name", "platform", "property"}
+# Stream co dinh: ten -> breakdowns (thu tu = thu tu cot trong khoa chinh). `property` = ID app tren Meta.
+STREAM_BREAKDOWNS = [
+    ("meta_audience_network_by_platform", ["platform"]),
+    ("meta_audience_network_by_app", ["property", "platform"]),
+    ("meta_audience_network_by_app_country", ["property", "platform", "country"]),
+]
 
 
 class MetaApiError(Exception):
@@ -101,15 +110,14 @@ def _to_list(value: Any, default: List[str]) -> List[str]:
     return [str(v).strip() for v in value if str(v).strip()]
 
 
-def _resolve_metrics_breakdowns(config: Mapping[str, Any]) -> Tuple[List[str], List[str]]:
+def _resolve_metrics(config: Mapping[str, Any]) -> List[str]:
     metrics = [m for m in _to_list(config.get("metrics"), DEFAULT_METRICS) if m in ALLOWED_METRICS]
     if not metrics:
         metrics = list(DEFAULT_METRICS)
-    breakdowns = [b for b in _to_list(config.get("breakdowns"), DEFAULT_BREAKDOWNS) if b in ALLOWED_BREAKDOWNS]
-    if "placement" in breakdowns and "placement_name" in breakdowns:
-        logger.warning("`placement` va `placement_name` khong dung chung duoc -> bo `placement_name`.")
-        breakdowns.remove("placement_name")
-    return metrics, breakdowns
+    if config.get("breakdowns"):
+        # Config tao tu v1.0.0 con truong nay: v1.1.0 dung 3 stream co dinh, bo qua.
+        logger.warning("`breakdowns` trong config khong con dung tu v1.1.0 (3 stream co dinh) -> bo qua.")
+    return metrics
 
 
 def _metric_column(metric: str) -> str:
@@ -460,11 +468,9 @@ class SourceMetaAudienceNetwork(AbstractSource):
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
         accounts = config.get("accounts", [])
-        metrics, breakdowns = _resolve_metrics_breakdowns(config)
+        metrics = _resolve_metrics(config)
         return [
-            MetaAudienceNetworkStream(config=config, accounts=accounts, stream_name="meta_audience_network_report",
-                                      breakdowns=breakdowns, metrics=metrics),
-            # Tong theo ngay, khong breakdown: Meta khong an doanh thu vi it impression -> so day du de doi chieu
-            MetaAudienceNetworkStream(config=config, accounts=accounts, stream_name="meta_audience_network_total",
-                                      breakdowns=[], metrics=metrics),
+            MetaAudienceNetworkStream(config=config, accounts=accounts, stream_name=stream_name,
+                                      breakdowns=breakdowns, metrics=metrics)
+            for stream_name, breakdowns in STREAM_BREAKDOWNS
         ]
