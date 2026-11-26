@@ -4,8 +4,10 @@
 
 Custom Airbyte source: Meta Audience Network Reporting API v2 -> BigQuery (doanh thu quang cao lay truc tiep tu Meta Audience Network, de doi soat voi so uoc tinh cua AppLovin MAX — ad source `FACEBOOK_NETWORK`).
 Streams (incremental, cursor `date`, multi-account):
-- `meta_audience_network_report` — chi tiet theo breakdown (mac dinh placement x country x platform).
-- `meta_audience_network_total` — tong theo ngay, khong breakdown (so day du de doi chieu).
+- `meta_audience_network_by_platform` — ngay x platform. Thay 100% doanh thu -> so chuan de doi chieu.
+- `meta_audience_network_by_app` — ngay x property (app) x platform. Thay khoang 92% doanh thu.
+- `meta_audience_network_by_app_country` — ngay x property x platform x country. Thay khoang 44% doanh thu; impression / request du 100%.
+3 stream CO DINH tu v1.1.0 (khong con tuy chon `breakdowns`); stream nao khong can thi bo tick khi tao connection.
 
 Docs API: https://developers.facebook.com/docs/audience-network/optimization/report-api/guide-v2
 
@@ -27,8 +29,11 @@ Docs API: https://developers.facebook.com/docs/audience-network/optimization/rep
 - Token gui bang header `Authorization: Bearer` (khong nam trong URL); KHONG di theo `paging.next` (URL do chua access_token) ma phan trang bang cursor `after`.
 - Mui gio: **Pacific, khong doi duoc** (ngoai le so voi cac connector khac deu UTC). Moi record co `report_timezone` = `America/Los_Angeles` va `period_start_utc` (moc bat dau ngay theo UTC) de doi chieu.
 - Ten cot metric bo tien to `fb_ad_network_`: `request, filled_request, imp, click, revenue` (+ `cpm, ctr, fill_rate, show_rate, bidding_*` neu chon).
-- `revenue_omitted` = true khi Meta an doanh thu cua o do (`revenue` = null). Breakdown cang nho thi cang nhieu o bi an -> **tong `revenue` cua stream chi tiet co the THAP hon thuc te; lay so tong tu `meta_audience_network_total`.**
-- PK: stream chi tiet `account_name, date` + `breakdowns`; stream tong `account_name, date`.
+- `revenue_omitted` = true khi Meta an doanh thu cua o do (`revenue` = null). Tach cang nhieu chieu thi cang nhieu o bi an -> **tong `revenue` cua 2 stream chi tiet THAP hon thuc te; so day du lay tu `meta_audience_network_by_platform`.**
+- Nguong do tren du lieu that (26/11/2026, Meta khong cong bo): o co >= 100 impression / ngay thi co doanh thu, duoi 100 thi bi an; so dem (imp, request, click) khong bao gio bi an.
+- Phan doanh thu bi an = so `by_platform` - tong phan thay duoc; phan bo (vi du theo ty le impression) lam o dbt, KHONG lam trong connector.
+- `property` = ID app tren Meta (so), khong kem ten -> can bang doi chieu sang ma game o dbt.
+- PK: `by_platform` = `account_name, date, platform`; `by_app` = `account_name, date, property, platform`; `by_app_country` = `account_name, date, property, platform, country`.
 - Slice = account x cua so `window_days` ngay (mac dinh 7 = toi da).
 - Start som hon 539 ngay -> tu clamp va ghi warning.
 - Incremental: start = cursor - `number_days_backward` (mac dinh **14**); `get_last_X_days` bo qua start_date; cursor khong +1, clamp <= today (Pacific). Moi stream co state rieng.
@@ -49,15 +54,22 @@ python main.py read     --config secrets/config.json --catalog integration_tests
 ```
 `META_AN_URL_BASE`, `META_AN_RETRY_BASE_SEC` chi dung cho test voi server gia; khong dat cac bien nay tren Airbyte.
 
-## Build (tren VM: /home/data/airbyte-custom-ezg, nhanh `agent/source-meta-audience-network-custom`)
+## Build (tren VM: /home/data/airbyte-custom-ezg, nhanh chinh, thu muc `airbyte-integrations/connectors/ezg-source-meta-audience-network-custom`)
 ```bash
-docker build -t dataezg/source-meta-audience-network-custom:v1.0.0 .
-docker run --rm dataezg/source-meta-audience-network-custom:v1.0.0 spec | head -c 300
-docker push dataezg/source-meta-audience-network-custom:v1.0.0
+docker build -t dataezg/source-meta-audience-network-custom:v1.1.0 .
+docker run --rm dataezg/source-meta-audience-network-custom:v1.1.0 spec | head -c 300
+docker push dataezg/source-meta-audience-network-custom:v1.1.0
 ```
-Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-meta-audience-network-custom`, tag `v1.0.0`.
-Connection: 2 stream, Incremental | Append + Deduped -> `airbyte_data_export.meta_audience_network_report`, `airbyte_data_export.meta_audience_network_total`.
-Luu y van hanh: long-lived user token het han sau khoang 60 ngay neu khong duoc lam moi -> khi sync bao code 190 thi tao token moi va cap nhat source.
+Airbyte: Settings -> Sources -> + New connector -> image `dataezg/source-meta-audience-network-custom`, tag `v1.1.0`.
+Connection: 3 stream, Incremental | Append + Deduped -> `airbyte_data_export.meta_audience_network_by_platform`, `..._by_app`, `..._by_app_country`.
+Luu y van hanh: long-lived user token het han sau khoang 60 ngay neu khong co request. Tai lieu Meta ghi token duoc gia han moi ngay khi co goi Reporting API, nhung co phan anh nguoc -> theo doi; khi sync bao code 190 thi tao token moi va cap nhat source.
+
+## v1.1.0 — Changelog
+- DOI STREAM (khong tuong thich nguoc; chua co source nao tren Airbyte dung v1.0.0): bo `meta_audience_network_report` + `meta_audience_network_total`, thay bang 3 stream co dinh `by_platform`, `by_app`, `by_app_country`; bo tuy chon `breakdowns` (config cu con truong nay thi bo qua, ghi warning). Ly do: mart doanh thu can ngay x game x quoc gia x platform, va Meta an doanh thu o o nho nen phai keo nhieu muc de biet phan bi an.
+- Test voi server gia: 40/40 dat.
+- DA xac nhan voi token that (26/11/2026, 09/11 -> 25/11 Pacific, 1 account): `check` dat (long-lived user token dung loai); 3 stream khong trung khoa, khong null khoa; `by_platform` 34 dong, 0 dong bi an, 1.622,51 USD; `by_app` 189 dong (12 app), thay 92,1%; `by_app_country` 4.723 dong, thay 44,1%; impression 60.818 khop giua 3 stream. `platform` chi co `android`, `ios`.
+- Thu them (khong thanh stream): country 68%, country x platform 65%, placement x country x platform 28% doanh thu thay duoc.
+- Chua doi soat chinh xac voi AppLovin MAX (`FACEBOOK_NETWORK`): ngay Meta lech 8 gio so voi ngay UTC cua MAX; so tho tuan 09-15/11: MAX 734,42, Meta 756,69 (+3,0%). Chua build image.
 
 ## v1.0.0 — Changelog
 - Khoi tao. Test voi server gia (Python 3.12, airbyte-cdk 0.51.1): spec / discover 2 stream / check (token system user va token het han bao ro, khong lo token) / gop dong dai ke ca o nam o 2 trang / ngay Pacific / revenue bi an / stream tong / incremental lookback 14 / clamp 540 ngay / clamp cursor tuong lai / retry loi tam thoi / account loi -> state khong vuot / trung o thi dung / token khong nam trong URL — 35/35 dat.

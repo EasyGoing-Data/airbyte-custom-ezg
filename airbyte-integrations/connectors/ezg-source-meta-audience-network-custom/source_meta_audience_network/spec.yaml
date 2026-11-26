@@ -61,19 +61,10 @@ connectionSpecification:
       default: 7
       minimum: 1
       maximum: 7
-    breakdowns:
-      title: Breakdowns
-      description: "Grain of stream meta_audience_network_report (besides date). Allowed: placement, placement_name, country, platform, property, delivery_method, ad_space. placement and placement_name cannot be combined. Finer grain means more cells whose revenue Meta withholds for low impressions; stream meta_audience_network_total always has the full daily total."
-      order: 5
-      type: array
-      items:
-        type: string
-        enum: [placement, placement_name, country, platform, property, delivery_method, ad_space]
-      default: [placement, country, platform]
     metrics:
       title: Metrics
-      description: "Metrics for both streams. Column names drop the fb_ad_network_ prefix."
-      order: 6
+      description: "Metrics for all three streams (by platform, by app x platform, by app x platform x country). Column names drop the fb_ad_network_ prefix. Meta withholds revenue for cells under about 100 impressions per day; only the by-platform stream has full revenue."
+      order: 5
       type: array
       items:
         type: string
@@ -100,6 +91,6 @@ connectionSpecification:
     graph_api_version:
       title: Graph API version
       description: Graph API version in the request path. Default v27.0. Raise it when Meta retires the version.
-      order: 7
+      order: 6
       type: string
       default: v27.0

@@ -2,7 +2,7 @@
   "streams": [
     {
       "stream": {
-        "name": "meta_audience_network_report",
+        "name": "meta_audience_network_by_platform",
         "json_schema": {},
         "supported_sync_modes": ["full_refresh", "incremental"],
         "source_defined_cursor": true,
@@ -11,11 +11,11 @@
       "sync_mode": "incremental",
       "cursor_field": ["date"],
       "destination_sync_mode": "append_dedup",
-      "primary_key": [["account_name"], ["date"], ["placement"], ["country"], ["platform"]]
+      "primary_key": [["account_name"], ["date"], ["platform"]]
     },
     {
       "stream": {
-        "name": "meta_audience_network_total",
+        "name": "meta_audience_network_by_app",
         "json_schema": {},
         "supported_sync_modes": ["full_refresh", "incremental"],
         "source_defined_cursor": true,
@@ -24,7 +24,20 @@
       "sync_mode": "incremental",
       "cursor_field": ["date"],
       "destination_sync_mode": "append_dedup",
-      "primary_key": [["account_name"], ["date"]]
+      "primary_key": [["account_name"], ["date"], ["property"], ["platform"]]
+    },
+    {
+      "stream": {
+        "name": "meta_audience_network_by_app_country",
+        "json_schema": {},
+        "supported_sync_modes": ["full_refresh", "incremental"],
+        "source_defined_cursor": true,
+        "default_cursor_field": ["date"]
+      },
+      "sync_mode": "incremental",
+      "cursor_field": ["date"],
+      "destination_sync_mode": "append_dedup",
+      "primary_key": [["account_name"], ["date"], ["property"], ["platform"], ["country"]]
     }
   ]
 }
